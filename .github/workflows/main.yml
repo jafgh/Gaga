@@ -22,7 +22,7 @@ jobs:
           sudo apt-get update
           DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
             git zip unzip openjdk-17-jdk python3-pip \
-            autoconf automake libtool m4 \
+            autoconf automake libtool m4 libltdl-dev \
             zlib1g-dev libncurses-dev \
             cmake libffi-dev libssl-dev
 
