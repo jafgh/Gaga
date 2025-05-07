@@ -11,40 +11,40 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # نخبر Buildozer أين يجد JDK المثبّت مسبقاً على runner
       JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
 
     steps:
-      # 1) استنساخ الكود
+      # 1) Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2) إعداد بايثون
+      # 2) Install system‑dependencies for Buildozer/python‑for‑android
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk python3-pip \
+            autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 \
+            cmake libffi-dev libssl-dev
+
+      # 3) Setup Python
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # 3) تثبيت Buildozer وكل ما يحتاجه (Cython، إلخ)
+      # 4) Install Buildozer & Cython
       - name: Install Buildozer & dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install cython
-          pip install buildozer  # يثبت أحدث إصدار من PyPI :contentReference[oaicite:0]{index=0}
+          pip install Cython==0.29.33 buildozer
 
-      # 4) (اختياري) تأكد من متغيّر JAVA_HOME
-      - name: Verify JAVA_HOME
-        run: |
-          echo "JAVA_HOME=$JAVA_HOME"
-          $JAVA_HOME/bin/java -version
-
-      # 5) بناء الـ APK
+      # 5) Build the APK (stdin from /dev/null لتجنّب prompts وBroken pipe)
       - name: Build APK with Buildozer
-        run: |
-          # يوافق "yes" على أيّ موجه (licenses مثلاً) تلقائيًا
-          yes | buildozer android debug  # استخدم “yes” لتجاوز prompts :contentReference[oaicite:1]{index=1}
+        run: buildozer android debug --verbose < /dev/null
 
-      # 6) رفع الـ APK كـ Artifact
+      # 6) Upload the generated APK
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
