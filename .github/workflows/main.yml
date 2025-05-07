@@ -11,40 +11,42 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      # JAVA_HOME مثبت مسبقاً على runner
       JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
 
     steps:
-      # 1) Checkout code
+      # 1) استنساخ الكود
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2) Install system‑dependencies for Buildozer/python‑for‑android
+      # 2) تثبيت تبعيات النظام اللازمة لتجميع hostpython و python-for-android
       - name: Install apt dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
             git zip unzip openjdk-17-jdk python3-pip \
             autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 \
             cmake libffi-dev libssl-dev
 
-      # 3) Setup Python
+      # 3) إعداد بايثون
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # 4) Install Buildozer & Cython
+      # 4) تثبيت Buildozer و Cython
       - name: Install Buildozer & dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install Cython==0.29.33 buildozer
 
-      # 5) Build the APK (stdin from /dev/null لتجنّب prompts وBroken pipe)
+      # 5) بناء الـ APK 
+      #    نوجّه stdin إلى /dev/null لتجنّب أي prompts وبقاء العملية معلقة
       - name: Build APK with Buildozer
         run: buildozer android debug --verbose < /dev/null
 
-      # 6) Upload the generated APK
+      # 6) رفع الـ APK كـ artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
