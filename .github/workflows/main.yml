@@ -10,29 +10,43 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
 
+    env:
+      # نخبر Buildozer أين يجد JDK المثبّت مسبقاً على runner
+      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
+
     steps:
-      # 1. Checkout الكود
+      # 1) استنساخ الكود
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2. Buildozer Action
-      #    هذه Action تتولى تثبيت Buildozer وكل المتطلبات وتشغيل الأمر المحدد
-      - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
+      # 2) إعداد بايثون
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
         with:
-          # مسار المجلد الذي فيه buildozer.spec ('.' يعني جذر المستودع)
-          workdir: .
-          # الأمر الذي تريد تشغيله (يمكن تغييره لـ 'android release' وهكذا)
-          command: buildozer android debug
-          # إصدار Buildozer: 'stable' يثبت آخر إصدار متاح من PyPI
-          buildozer_version: stable
+          python-version: '3.10'
 
-      # 3. رفع الـ APK كـ Artifact (الإصدار الرابع)
+      # 3) تثبيت Buildozer وكل ما يحتاجه (Cython، إلخ)
+      - name: Install Buildozer & dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install cython
+          pip install buildozer  # يثبت أحدث إصدار من PyPI :contentReference[oaicite:0]{index=0}
+
+      # 4) (اختياري) تأكد من متغيّر JAVA_HOME
+      - name: Verify JAVA_HOME
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          $JAVA_HOME/bin/java -version
+
+      # 5) بناء الـ APK
+      - name: Build APK with Buildozer
+        run: |
+          # يوافق "yes" على أيّ موجه (licenses مثلاً) تلقائيًا
+          yes | buildozer android debug  # استخدم “yes” لتجاوز prompts :contentReference[oaicite:1]{index=1}
+
+      # 6) رفع الـ APK كـ Artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          # الاسم الظاهر في تبويب Artifacts
           name: MyCaptchaApp-APK
-          # مسار الملف المنتج، يُستخرج تلقائيًا من مخرجات الخطوة السابقة
-          path: ${{ steps.buildozer.outputs.filename }}
+          path: bin/android/debug/*.apk
