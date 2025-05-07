@@ -23,11 +23,9 @@ jobs:
         with:
           python-version: '3.9'
 
-      # 3. Install Docker for Buildozer
-      - name: Install Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker.io
+      # 3. Verify Docker is available (pre-installed on GitHub runners)
+      - name: Check Docker
+        run: docker --version
 
       # 4. Build APK inside Buildozer Docker container
       - name: Build APK with Buildozer
