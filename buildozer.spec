@@ -10,6 +10,9 @@ package.domain = org.example
 # (str) Source code where the main.py live
 source.dir = .
 
+# (str) Application version
+version = 1.0.0
+
 # (list) Application requirements
 # أضف كل المكتبات التي يستدعيها تطبيقك
 requirements = python3,kivy,requests,Pillow,numpy
