@@ -2,41 +2,34 @@ name: Build Android APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2. Setup Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      # 3. Verify Docker is available (pre-installed on GitHub runners)
       - name: Check Docker
         run: docker --version
 
-      # 4. Build APK inside Buildozer Docker container
       - name: Build APK with Buildozer
         run: |
           docker run --rm \
             -v "${{ github.workspace }}":/home/user/hostcwd \
             -w /home/user/hostcwd \
-            kivy/buildozer:python3.9 \
+            kivy/buildozer \
             buildozer android debug --verbose
 
-      # 5. Upload the generated APK as artifact (use v4)
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
