@@ -1,30 +1,37 @@
 name: Build Android APK
 
+# يشتغل عند كل push أو Pull Request على الفرع main
 on:
   push:
     branches:
-      - main    # أو الفرع الذي تريد البناء عليه
+      - main
   pull_request:
+    branches:
+      - main
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+
     steps:
+      # 1. جلب كود المشروع
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # 2. إعداد بايثون
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      - name: Install Docker (for Buildozer)
+      # 3. تثبيت Docker (مطلوب لتشغيل Buildozer داخل الحاوية)
+      - name: Install Docker
         run: |
           sudo apt-get update
           sudo apt-get install -y docker.io
 
+      # 4. بناء الـ APK باستخدام Buildozer في حاوية Docker
       - name: Build APK with Buildozer
-        # نستخدم صورة Buildozer الرسمية داخل Docker
         run: |
           docker run --rm \
             -v "${{ github.workspace }}":/home/user/hostcwd \
@@ -32,6 +39,7 @@ jobs:
             kivy/buildozer:python3.9 \
             buildozer android debug --verbose
 
+      # 5. رفع ملف الـ APK كـ Artifact قابل للتحميل
       - name: Upload APK artifact
         uses: actions/upload-artifact@v3
         with:
