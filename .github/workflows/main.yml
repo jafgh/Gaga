@@ -11,27 +11,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout الكود
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      # 2. Buildozer Action
+      #    هذه Action تتولى تثبيت Buildozer وكل المتطلبات وتشغيل الأمر المحدد
+      - name: Build with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
         with:
-          python-version: '3.9'
+          # مسار المجلد الذي فيه buildozer.spec ('.' يعني جذر المستودع)
+          workdir: .
+          # الأمر الذي تريد تشغيله (يمكن تغييره لـ 'android release' وهكذا)
+          command: buildozer android debug
+          # إصدار Buildozer: 'stable' يثبت آخر إصدار متاح من PyPI
+          buildozer_version: stable
 
-      - name: Check Docker
-        run: docker --version
-
-      - name: Build APK with Buildozer
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}":/home/user/hostcwd \
-            -w /home/user/hostcwd \
-            kivy/buildozer \
-            buildozer android debug --verbose
-
+      # 3. رفع الـ APK كـ Artifact (الإصدار الرابع)
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
+          # الاسم الظاهر في تبويب Artifacts
           name: MyCaptchaApp-APK
-          path: bin/android/debug/*.apk
+          # مسار الملف المنتج، يُستخرج تلقائيًا من مخرجات الخطوة السابقة
+          path: ${{ steps.buildozer.outputs.filename }}
