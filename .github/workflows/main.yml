@@ -1,6 +1,5 @@
 name: Build Android APK
 
-# يشتغل عند كل push أو Pull Request على الفرع main
 on:
   push:
     branches:
@@ -14,23 +13,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. جلب كود المشروع
+      # 1. Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2. إعداد بايثون
+      # 2. Setup Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      # 3. تثبيت Docker (مطلوب لتشغيل Buildozer داخل الحاوية)
+      # 3. Install Docker for Buildozer
       - name: Install Docker
         run: |
           sudo apt-get update
           sudo apt-get install -y docker.io
 
-      # 4. بناء الـ APK باستخدام Buildozer في حاوية Docker
+      # 4. Build APK inside Buildozer Docker container
       - name: Build APK with Buildozer
         run: |
           docker run --rm \
@@ -39,9 +38,9 @@ jobs:
             kivy/buildozer:python3.9 \
             buildozer android debug --verbose
 
-      # 5. رفع ملف الـ APK كـ Artifact قابل للتحميل
+      # 5. Upload the generated APK as artifact (use v4)
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: MyCaptchaApp-APK
           path: bin/android/debug/*.apk
