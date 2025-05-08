@@ -14,7 +14,7 @@ source.dir = .
 version = 1.0.0
 
 # (list) Application requirements
-requirements = python3,kivy,requests,Pillow,numpy
+requirements = python3,kivy,requests,Pillow,numpy,python-bidi,arabic-reshaper
 
 # (str) Supported orientation (portrait, landscape or all)
 orientation = portrait
