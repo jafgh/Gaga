@@ -4,10 +4,9 @@ import time
 import base64
 import io
 import random
-import requests  # تأكد من أن requests مثبت
+import requests  
 from PIL import Image as PILImage
 import numpy as np
-# import onnxruntime as ort # --- لم نعد بحاجة لهذه المكتبة هنا
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
@@ -21,25 +20,16 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.image import Image as KivyImage
 from kivy.clock import Clock
 from kivy.core.image import Image as CoreImage
+from kivy.core.text import LabelBase  
 
-# --------------------------------------------------
-# ثوابت
-# --------------------------------------------------
-# --- لم تعد هناك حاجة لهذه الثوابت الخاصة بالنموذج المحلي في تطبيق Kivy ---
-# CHARSET = '0123456789abcdefghijklmnopqrstuvwxyz'
-# CHAR2IDX = {c: i for i, c in enumerate(CHARSET)}
-# IDX2CHAR = {i: c for c, i in CHAR2IDX.items()}
-# NUM_CLASSES = len(CHARSET)
-# NUM_POS = 5
-# ONNX_MODEL_PATH = r"assets\holako_bag.onnx" # --- مسار النموذج المحلي لم يعد مستخدماً
-# EXPECTED_SIZE = (224, 224) # --- حجم الصورة المتوقع من قبل النموذج يُعالج الآن في API
 
-# --- رابط API الخاص بك ---
+LabelBase.register(name='Roboto', fn_regular=os.path.join('assets', 'arabic.ttf'))
+
+
+
 CAPTCHA_API_URL = "https://jafgh.pythonanywhere.com/predict"
 
-# --------------------------------------------------
-# تصميم الواجهة باستخدام Kivy
-# --------------------------------------------------
+
 KV = '''
 <CaptchaWidget>:
     orientation: 'vertical'
@@ -91,15 +81,7 @@ class CaptchaWidget(BoxLayout):
         super().__init__(**kwargs)
         self.accounts = {}
         self.current_captcha = None
-        # --- إزالة تحميل نموذج ONNX المحلي ---
-        # if not os.path.exists(ONNX_MODEL_PATH):
-        #     self.show_error(f"ONNX model not found:\n{ONNX_MODEL_PATH}")
-        #     return
-        # try:
-        #     self.session_onnx = ort.InferenceSession(ONNX_MODEL_PATH, providers=['CPUExecutionProvider'])
-        # except Exception as e:
-        #     self.show_error(f"Failed to load ONNX model:\n{e}")
-        #     return
+
 
     def show_error(self, msg):
         Popup(title='Error', content=Label(text=msg), size_hint=(0.8, 0.4)).open()
@@ -276,7 +258,7 @@ class CaptchaWidget(BoxLayout):
         except requests.exceptions.RequestException as e:
             self.update_notification(f"API Request Error: {e}", (1, 0, 0, 1))
             return None, 0, (time.time() - t_api_start) * 1000
-        except ValueError as e:  # JSONDecodeError يرث من ValueError
+        except ValueError as e:  
             self.update_notification(f"API Response Error: Invalid JSON received. {e}", (1, 0, 0, 1))
             return None, 0, (time.time() - t_api_start) * 1000
         except Exception as e:
@@ -288,9 +270,8 @@ class CaptchaWidget(BoxLayout):
             self.ids.captcha_box.clear_widgets()
             b64 = b64data.split(',')[1] if ',' in b64data else b64data
             raw = base64.b64decode(b64)
-            pil_original = PILImage.open(io.BytesIO(raw))  # الصورة الأصلية قد تكون GIF
+            pil_original = PILImage.open(io.BytesIO(raw)) 
 
-            # معالجة Otsu (تبقى كما هي لإنتاج الصورة الثنائية)
             frames = []
             try:
                 while True:
@@ -299,7 +280,7 @@ class CaptchaWidget(BoxLayout):
             except EOFError:
                 pass
 
-            if not frames:  # إذا لم تكن الصورة GIF أو فشلت قراءة الإطارات
+            if not frames:  
                 bg = np.array(pil_original.convert('RGB'), dtype=np.uint8)
             else:
                 bg = np.median(np.stack(frames), axis=0).astype(np.uint8)
@@ -323,10 +304,9 @@ class CaptchaWidget(BoxLayout):
                 varBetween = wB * wF * (mB - mF) ** 2
                 if varBetween > max_var: max_var = varBetween; thresh = i
 
-            # 'binary' هي الصورة التي سترسل إلى API
             binary_pil_img = PILImage.fromarray(gray, 'L').point(lambda p: 255 if p > thresh else 0)
 
-            # عرض الصورة المعالجة في الواجهة (اختياري لكن مفيد للمستخدم)
+       
             buf = io.BytesIO();
             binary_pil_img.save(buf, format='PNG');
             buf.seek(0)
@@ -334,8 +314,6 @@ class CaptchaWidget(BoxLayout):
             img_w = KivyImage(texture=core_img.texture, size_hint_y=None, height='90dp')
             self.ids.captcha_box.add_widget(img_w)
 
-            # استدعاء دالة التنبؤ الجديدة التي تستخدم API
-            # `binary_pil_img` هي الصورة بعد معالجة Otsu
             pred_text, pre_ms, api_call_ms = self.predict_captcha(binary_pil_img)
 
             if pred_text is not None:  # التحقق من أن التنبؤ لم يفشل
@@ -344,7 +322,7 @@ class CaptchaWidget(BoxLayout):
                 Clock.schedule_once(lambda dt: setattr(self.ids.speed_label, 'text',
                                                        f"API Call Time: {api_call_ms:.2f} ms"), 0)
                 self.submit_captcha(pred_text)
-            # else: تم عرض رسالة الخطأ بالفعل من داخل predict_captcha
+        
 
         except Exception as e:
             self.update_notification(f"Error processing/displaying captcha: {e}", (1, 0, 0, 1))
@@ -363,8 +341,8 @@ class CaptchaWidget(BoxLayout):
             try:  # محاولة فك تشفير النص إذا كان UTF-8 مع رموز غير صالحة
                 msg_text = r.content.decode('utf-8', errors='replace')
             except Exception:
-                pass  # استخدام r.text الأصلي إذا فشل الفك
-            self.update_notification(f"Submit response: {msg_text}", col)
+                pass  
+            self.update_notification(f"Submit response:تم التثبيت بنجاح {msg_text}", col)
         except Exception as e:
             self.update_notification(f"Submit error: {e}", (1, 0, 0, 1))
 
