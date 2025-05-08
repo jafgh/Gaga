@@ -43,4 +43,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MyCaptchaApp-APK
-          path: bin/android/debug/*.apk
+          path: bin/**/*.apk
+
