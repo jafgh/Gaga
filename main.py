@@ -4,7 +4,7 @@ import time
 import base64
 import io
 import random
-import requests
+import requests  # تأكد من أن requests ومكتبات arabic_reshaper و python-bidi مثبتة
 from PIL import Image as PILImage
 import numpy as np
 from kivy.app import App
@@ -21,49 +21,42 @@ from kivy.uix.image import Image as KivyImage
 from kivy.clock import Clock
 from kivy.core.image import Image as CoreImage
 from kivy.core.text import LabelBase
-from kivy.graphics import Color, Rectangle
-from kivy.storage.jsonstore import JsonStore
-from kivy.core.window import Window
+from kivy.config import ConfigParser
+from arabic_reshaper import reshape
+from bidi.algorithm import get_display
 
+# تسجيل خط arabic.ttf كخط افتراضي (Roboto) لجميع عناصر النص
+LabelBase.register(name='Roboto', fn_regular=os.path.join('assets', 'arabic.ttf'))
 
-assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
-if not os.path.exists(assets_dir):
-    os.makedirs(assets_dir)
-font_path = os.path.join(assets_dir, 'arabic.ttf')
-
-if os.path.exists(font_path):
-    LabelBase.register(name='Roboto', fn_regular=font_path)
-else:
-    print(f"تحذير: ملف الخط العربي {font_path} غير موجود. قد لا يتم عرض النص العربي بشكل صحيح.")
-    try:
-        LabelBase.register(name='Roboto', fn_regular='Roboto-Regular.ttf') # Fallback
-    except Exception as e:
-        print(f"Error registering fallback font: {e}")
-        # As a last resort, Kivy might use a default system font.
-
+# --------------------------------------------------
+# تحميل إعدادات API من ملف config.ini أو سؤال المستخدم في أول تشغيل
+# --------------------------------------------------
+config = ConfigParser()
+config_file = os.path.join(App.get_running_app().user_data_dir if App.get_running_app() else os.getcwd(), 'config.ini')
+config.read(config_file)
+if not config.has_section('api'):
+    config.add_section('api')
+subdomain = config.get('api', 'subdomain', fallback=None)
 
 KV = '''
 <CaptchaWidget>:
     orientation: 'vertical'
     padding: 10
     spacing: 10
-    font_name: 'Roboto'
 
     BoxLayout:
         size_hint_y: None
         height: '30dp'
         Label:
             id: notification_label
-            text: 'الرجاء تكوين واجهة برمجة التطبيقات إذا لم يتم ذلك بعد.'
-            font_name: 'Roboto'
+            text: ''
             font_size: 14
             color: 1,1,1,1
             halign: 'right'
-            text_size: self.width, None
+            text_size: self.size
 
     Button:
-        text: 'إضافة حساب'
-        font_name: 'Roboto'
+        text: root.translate('Add Account')
         size_hint_y: None
         height: '40dp'
         on_press: root.open_add_account_popup()
@@ -83,180 +76,106 @@ KV = '''
             row_default_height: '40dp'
             row_force_default: False
             spacing: 5
-            
-    BoxLayout:
-        id: success_indicator_bar
-        size_hint_y: None
-        height: '0dp'
-        canvas.before:
-            Color:
-                rgba: 0, 1, 0, 0
-            Rectangle:
-                pos: self.pos
-                size: self.size
 
     Label:
         id: speed_label
-        text: 'وقت استدعاء الواجهة: 0 مل/ث'
-        font_name: 'Roboto'
+        text: root.translate('API Call Time:') + ' 0 ms'
         size_hint_y: None
         height: '30dp'
         font_size: 12
         halign: 'right'
-        text_size: self.width, None
-
-<PopupContent@BoxLayout>:
-    orientation: 'vertical'
-    spacing: 10
-    padding: 10
-    font_name: 'Roboto'
-    user_input: user_input_id
-    pwd_input: pwd_input_id
-
-    TextInput:
-        id: user_input_id
-        hint_text: 'اسم المستخدم'
-        font_name: 'Roboto'
-        multiline: False
-        halign: 'right'
-        write_tab: False
-    TextInput:
-        id: pwd_input_id
-        hint_text: 'كلمة المرور'
-        font_name: 'Roboto'
-        password: True
-        multiline: False
-        halign: 'right'
-        write_tab: False
-    BoxLayout:
-        size_hint_y: None
-        height: '40dp'
-        spacing: 10
-        Button:
-            id: btn_ok
-            text: 'موافق'
-            font_name: 'Roboto'
-        Button:
-            id: btn_cancel
-            text: 'إلغاء'
-            font_name: 'Roboto'
-
-<ErrorPopup@Popup>:
-    title: 'خطأ'
-    title_font_name: 'Roboto'
-    content: error_label
-    size_hint: 0.8, 0.4
-    title_align: 'right'
-    ErrorLabel:
-        id: error_label
-        font_name: 'Roboto'
-        halign: 'right'
-        text_size: self.width * 0.9, None
-
-<ErrorLabel@Label>:
-    font_name: 'Roboto'
-    halign: 'right'
-    valign: 'middle'
-    padding_x: 10
-    size_hint_y: None
-    height: self.texture_size[1] if self.text else 0
-
-<ApiConfigPopupContent@BoxLayout>:
-    orientation: 'vertical'
-    spacing: '10dp'
-    padding: '10dp'
-    api_part_input: api_part_input_id
-    error_display_label: error_label_id
-
-    Label:
-        text: "إعداد واجهة برمجة التطبيقات (لأول مرة)"
-        font_name: 'Roboto'
-        size_hint_y: None
-        height: self.texture_size[1]
-        halign: 'right'
-        text_size: self.width, None
-    Label:
-        text: 'الرجاء إدخال الجزء المتغير من عنوان URL لواجهة CAPTCHA.\\nمثال: إذا كان الرابط https://jafgh.pythonanywhere.com/predict، أدخل "jafgh".'
-        font_name: 'Roboto'
-        halign: 'right'
-        size_hint_y: None
-        height: self.texture_size[1]
-        text_size: self.width, None
-    TextInput:
-        id: api_part_input_id
-        hint_text: 'أدخل الجزء هنا (مثال: jafgh)'
-        multiline: False
-        font_name: 'Roboto'
-        halign: 'right'
-        write_tab: False
-        size_hint_y: None
-        height: '40dp'
-    Label:
-        id: error_label_id # Important: This ID is used in Python code
-        text: ""
-        font_name: 'Roboto'
-        color: 1,0,0,1
-        size_hint_y: None
-        height: self.texture_size[1] if self.text else 0 # Only take height if text exists
-        halign: 'right'
-        text_size: self.width, None
-    Button:
-        id: save_button_id
-        text: "حفظ ومتابعة"
-        font_name: 'Roboto'
-        size_hint_y: None
-        height: '40dp'
+        text_size: self.size
 '''
-
 
 class CaptchaWidget(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.accounts = {}
         self.current_captcha = None
-        self.success_bar_color_instruction = self.ids.success_indicator_bar.canvas.before.children[0]
-        app = App.get_running_app()
-        if not getattr(app, 'CAPTCHA_API_URL', None):
-            self.ids.notification_label.text = 'الرجاء تكوين واجهة API أولاً من خلال إعدادات التطبيق.'
-            self.ids.notification_label.color = (1, 0.6, 0, 1) # Orange warning
+        self.api_subdomain = subdomain
+        # إذا لم يُحدد المجلد الفرعي لواجهة API، نفتح مربع نص للسؤال
+        if not self.api_subdomain:
+            Clock.schedule_once(lambda dt: self.open_api_popup(), 0)
+
+    def translate(self, text):
+        # إذا كان النص عربي، نعيد تشكيله ودعمه RTL
+        try:
+            # تحقق من وجود حروف عربية
+            if any('\u0600' <= c <= '\u06FF' for c in text):
+                reshaped = reshape(text)
+                return get_display(reshaped)
+        except Exception:
+            pass
+        return text
+
+    def open_api_popup(self):
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        hint = 'مثال: 5543f' if any(c.isalpha() for c in 'مثال') else 'e.g. 5543f'
+        sub_input = TextInput(hint_text=hint, multiline=False)
+        btn_layout = BoxLayout(size_hint_y=None, height='40dp', spacing=10)
+        btn_ok = Button(text=self.translate('OK'))
+        btn_layout.add_widget(btn_ok)
+        content.add_widget(Label(text=self.translate('Enter API subdomain:'), size_hint_y=None, height='30dp', halign='right', text_size=(None, None)))
+        content.add_widget(sub_input)
+        content.add_widget(btn_layout)
+        popup = Popup(title=self.translate('Configure API'), content=content, size_hint=(0.8, 0.4), auto_dismiss=False)
+
+        def on_ok(instance):
+            sd = sub_input.text.strip()
+            if sd:
+                self.api_subdomain = sd
+                config.set('api', 'subdomain', sd)
+                with open(config_file, 'w') as f:
+                    config.write(f)
+                popup.dismiss()
+        btn_ok.bind(on_press=on_ok)
+        popup.open()
+
+    @property
+    def CAPTCHA_API_URL(self):
+        return f"https://{self.api_subdomain}.pythonanywhere.com/predict"
 
     def show_error(self, msg):
-        content_label = ErrorLabel(text=msg)
-        popup = ErrorPopup(content=content_label)
-        content_label.bind(texture_size=content_label.setter('size'))
-        popup.open()
+        Popup(title='Error', content=Label(text=msg), size_hint=(0.8, 0.4)).open()
 
     def update_notification(self, msg, color):
         def _update(dt):
             lbl = self.ids.notification_label
             lbl.text = msg
             lbl.color = color
+
         Clock.schedule_once(_update, 0)
 
     def open_add_account_popup(self):
-        app = App.get_running_app()
-        if not getattr(app, 'CAPTCHA_API_URL', None):
-            self.show_error("يجب تكوين واجهة برمجة التطبيقات أولاً قبل إضافة حساب.")
-            return
-
-        content = Builder.load_string('PopupContent:')
-        popup = Popup(title='إضافة حساب جديد', content=content, size_hint=(0.9, 0.5), title_font_name='Roboto', title_align='right')
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        user_input = TextInput(hint_text='Username', multiline=False)
+        pwd_input = TextInput(hint_text='Password', password=True, multiline=False)
+        btn_layout = BoxLayout(size_hint_y=None, height='40dp', spacing=10)
+        btn_ok, btn_cancel = Button(text='OK'), Button(text='Cancel')
+        btn_layout.add_widget(btn_ok)
+        btn_layout.add_widget(btn_cancel)
+        content.add_widget(user_input)
+        content.add_widget(pwd_input)
+        content.add_widget(btn_layout)
+        popup = Popup(title='Add Account', content=content, size_hint=(0.8, 0.4))
 
         def on_ok(instance):
-            u = content.user_input.text.strip()
-            p = content.pwd_input.text.strip()
+            u, p = user_input.text.strip(), pwd_input.text.strip()
             popup.dismiss()
             if u and p:
-                threading.Thread(target=self.add_account, args=(u, p), daemon=True).start()
+                threading.Thread(target=self.add_account, args=(u, p)).start()
 
-        content.ids.btn_ok.bind(on_press=on_ok)
-        content.ids.btn_cancel.bind(on_press=lambda x: popup.dismiss())
+        btn_ok.bind(on_press=on_ok)
+        btn_cancel.bind(on_press=lambda x: popup.dismiss())
         popup.open()
 
     def generate_user_agent(self):
         ua_list = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:100.0) Gecko/20100101 Firefox/100.0",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Linux; Android 12; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Mobile Safari/537.36",
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:98.0) Gecko/20100101 Firefox/98.0"
         ]
         return random.choice(ua_list)
 
@@ -275,32 +194,30 @@ class CaptchaWidget(BoxLayout):
         sess = self.create_session_requests(self.generate_user_agent())
         t0 = time.time()
         if not self.login(user, pwd, sess):
-            self.update_notification(f"فشل تسجيل الدخول للمستخدم {user}", (1, 0, 0, 1));
+            self.update_notification(f"Login failed for {user}", (1, 0, 0, 1));
             return
-        self.update_notification(f"تم تسجيل دخول {user} في {time.time() - t0:.2f} ثانية", (0, 1, 0, 1))
+        self.update_notification(f"Logged in {user} in {time.time() - t0:.2f}s", (0, 1, 0, 1))
         self.accounts[user] = {"password": pwd, "session": sess}
         procs = self.fetch_process_ids(sess)
         if procs:
             Clock.schedule_once(lambda dt: self._create_account_ui(user, procs), 0)
         else:
-            self.update_notification(f"لا يمكن جلب معرفات العمليات للمستخدم {user}", (1, 0, 0, 1))
+            self.update_notification(f"Can't fetch process IDs for {user}", (1, 0, 0, 1))
 
     def login(self, user, pwd, sess, retries=3):
         url = "https://api.ecsc.gov.sy:8443/secure/auth/login"
         for _ in range(retries):
             try:
-                r = sess.post(url, json={"username": user, "password": pwd}, verify=False, timeout=10)
+                r = sess.post(url, json={"username": user, "password": pwd}, verify=False)
                 if r.status_code == 200:
-                    self.update_notification("تم تسجيل الدخول بنجاح.", (0, 1, 0, 1));
+                    self.update_notification("Login successful.", (0, 1, 0, 1));
                     return True
-                self.update_notification(f"فشل تسجيل الدخول (الرمز: {r.status_code})", (1, 0, 0, 1));
+                self.update_notification(f"Login failed ({r.status_code})", (1, 0, 0, 1));
                 return False
-            except requests.exceptions.RequestException as e:
-                self.update_notification(f"خطأ في تسجيل الدخول: {e}", (1, 0, 0, 1));
             except Exception as e:
-                self.update_notification(f"خطأ غير متوقع في تسجيل الدخول: {e}", (1,0,0,1))
+                self.update_notification(f"Login error: {e}", (1, 0, 0, 1));
+                return False
         return False
-
 
     def fetch_process_ids(self, sess):
         try:
@@ -308,35 +225,27 @@ class CaptchaWidget(BoxLayout):
                           json={"ALIAS": "OPkUVkYsyq", "P_USERNAME": "WebSite", "P_PAGE_INDEX": 0, "P_PAGE_SIZE": 100},
                           headers={"Content-Type": "application/json", "Alias": "OPkUVkYsyq",
                                    "Referer": "https://ecsc.gov.sy/requests", "Origin": "https://ecsc.gov.sy"},
-                          verify=False, timeout=10)
+                          verify=False)
             if r.status_code == 200:
                 return r.json().get("P_RESULT", [])
-            self.update_notification(f"فشل جلب المعرفات (الرمز: {r.status_code})", (1, 0, 0, 1))
-        except requests.exceptions.RequestException as e:
-            self.update_notification(f"خطأ في جلب المعرفات: {e}", (1, 0, 0, 1))
+            self.update_notification(f"Fetch IDs failed ({r.status_code})", (1, 0, 0, 1))
         except Exception as e:
-            self.update_notification(f"خطأ غير متوقع في جلب المعرفات: {e}", (1,0,0,1))
+            self.update_notification(f"Error fetching IDs: {e}", (1, 0, 0, 1))
         return []
 
     def _create_account_ui(self, user, processes):
         layout = self.ids.accounts_layout
-        user_label = Label(text=f"حساب: {user}", size_hint_y=None, height='25dp', font_name='Roboto', halign='right')
-        user_label.bind(width=lambda instance, value: setattr(instance, 'text_size', (value * 0.95, None)))
-        layout.add_widget(user_label)
-
+        layout.add_widget(Label(text=f"Account: {user}", size_hint_y=None, height='25dp'))
         for proc in processes:
             pid = proc.get("PROCESS_ID")
-            center_name = proc.get("ZCENTER_NAME", "غير معروف")
-            btn = Button(text=center_name, font_name='Roboto', halign='right')
-            btn.bind(size=lambda instance, value: setattr(instance, 'text_size', (instance.width * 0.9, None)))
-
+            btn = Button(text=proc.get("ZCENTER_NAME", "Unknown"))
             prog = ProgressBar(max=1, value=0)
             box = BoxLayout(size_hint_y=None, height='40dp', spacing=5)
             box.add_widget(btn);
             box.add_widget(prog)
             layout.add_widget(box)
             btn.bind(on_press=lambda inst, u=user, p=pid, pr=prog: threading.Thread(target=self._handle_captcha,
-                                                                                      args=(u, p, pr), daemon=True).start())
+                                                                                    args=(u, p, pr)).start())
 
     def _handle_captcha(self, user, pid, prog):
         Clock.schedule_once(lambda dt: setattr(prog, 'value', 0), 0)
@@ -350,72 +259,72 @@ class CaptchaWidget(BoxLayout):
         url = f"https://api.ecsc.gov.sy:8443/captcha/get/{pid}"
         try:
             while True:
-                r = sess.get(url, verify=False, timeout=10)
+                r = sess.get(url, verify=False)
                 if r.status_code == 200:
                     return r.json().get("file")
                 if r.status_code == 429:
-                    self.update_notification("طلبات كثيرة جدًا، يتم الانتظار...", (1, 0.5, 0, 1))
-                    time.sleep(1)
+                    time.sleep(0.1)
                 elif r.status_code in (401, 403):
-                    self.update_notification("جلسة غير صالحة، محاولة تسجيل الدخول مجددًا...", (1, 0.5, 0, 1))
                     if not self.login(user, self.accounts[user]["password"], sess): return None
                 else:
-                    self.update_notification(f"خطأ من الخادم عند جلب الكابتشا (الرمز: {r.status_code})", (1, 0, 0, 1))
+                    self.update_notification(f"Server error: {r.status_code}", (1, 0, 0, 1))
                     return None
-        except requests.exceptions.RequestException as e:
-            self.update_notification(f"خطأ في جلب الكابتشا: {e}", (1, 0, 0, 1))
         except Exception as e:
-            self.update_notification(f"خطأ غير متوقع في جلب الكابتشا: {e}", (1,0,0,1))
+            self.update_notification(f"Captcha error: {e}", (1, 0, 0, 1))
         return None
 
+    # --- تعديل دالة predict_captcha لاستخدام API ---
     def predict_captcha(self, pil_img: PILImage.Image):
+        """
+        يرسل صورة PIL إلى API التنبؤ بالكابتشا.
+        pil_img: كائن صورة PIL (يفضل أن تكون الصورة المعالجة بطريقة Otsu).
+        يعيد: (النص المتوقع, وقت المعالجة (0 حاليا), وقت استدعاء API بالمللي ثانية)
+        """
         t_api_start = time.time()
-        app = App.get_running_app()
-        current_captcha_api_url = getattr(app, 'CAPTCHA_API_URL', None)
-
-        if not current_captcha_api_url:
-            self.update_notification("خطأ: لم يتم تكوين عنوان URL لواجهة برمجة التطبيقات.", (1,0,0,1))
-            return None, 0, (time.time() - t_api_start) * 1000
-        
         try:
             img_byte_arr = io.BytesIO()
-            pil_img.save(img_byte_arr, format='PNG')
-            img_byte_arr.seek(0)
+            pil_img.save(img_byte_arr, format='PNG')  # إرسال الصورة بصيغة PNG
+            img_byte_arr.seek(0)  # العودة إلى بداية المخزن المؤقت
 
             files = {"image": ("captcha.png", img_byte_arr, "image/png")}
-            response = requests.post(current_captcha_api_url, files=files, timeout=30)
-            response.raise_for_status()
+            # استخدم CAPTCHA_API_URL المعرف في الأعلى
+            response = requests.post(CAPTCHA_API_URL, files=files, timeout=30)  # إضافة مهلة زمنية
+            response.raise_for_status()  # إطلاق استثناء لأخطاء HTTP (4xx أو 5xx)
 
             api_response = response.json()
             predicted_text = api_response.get("result")
 
-            if predicted_text is None:
-                self.update_notification("خطأ من الواجهة: نتيجة التنبؤ مفقودة أو فارغة.", (1, 0.5, 0, 1))
+            if not predicted_text and predicted_text != "":  # "" is a valid (but bad) prediction
+                self.update_notification(f"API Error: Prediction result is missing or null.", (1, 0.5, 0, 1))
                 return None, 0, (time.time() - t_api_start) * 1000
 
             total_api_time_ms = (time.time() - t_api_start) * 1000
-            return predicted_text, 0, total_api_time_ms
+            return predicted_text, 0, total_api_time_ms  # (prediction, preprocess_time_ms = 0, api_call_time_ms)
 
         except requests.exceptions.Timeout:
-            self.update_notification(f"مهلة الاتصال بواجهة التنبؤ: {current_captcha_api_url}", (1, 0, 0, 1))
+            self.update_notification(f"API Request Error: Timeout connecting to {CAPTCHA_API_URL}", (1, 0, 0, 1))
+            return None, 0, (time.time() - t_api_start) * 1000
         except requests.exceptions.ConnectionError:
-            self.update_notification(f"خطأ اتصال بواجهة التنبؤ: {current_captcha_api_url}", (1, 0, 0, 1))
+            self.update_notification(f"API Request Error: Could not connect to {CAPTCHA_API_URL}", (1, 0, 0, 1))
+            return None, 0, (time.time() - t_api_start) * 1000
         except requests.exceptions.RequestException as e:
-            self.update_notification(f"خطأ طلب من واجهة التنبؤ: {e}", (1, 0, 0, 1))
-        except ValueError as e:
-            self.update_notification(f"خطأ في استجابة واجهة التنبؤ: JSON غير صالح. {e}", (1, 0, 0, 1))
+            self.update_notification(f"API Request Error: {e}", (1, 0, 0, 1))
+            return None, 0, (time.time() - t_api_start) * 1000
+        except ValueError as e:  # JSONDecodeError يرث من ValueError
+            self.update_notification(f"API Response Error: Invalid JSON received. {e}", (1, 0, 0, 1))
+            return None, 0, (time.time() - t_api_start) * 1000
         except Exception as e:
-            self.update_notification(f"خطأ باستدعاء واجهة التنبؤ: {e}", (1, 0, 0, 1))
-        return None, 0, (time.time() - t_api_start) * 1000
-
+            self.update_notification(f"Error calling prediction API: {e}", (1, 0, 0, 1))
+            return None, 0, (time.time() - t_api_start) * 1000
 
     def _display_captcha(self, b64data):
         try:
             self.ids.captcha_box.clear_widgets()
             b64 = b64data.split(',')[1] if ',' in b64data else b64data
             raw = base64.b64decode(b64)
-            pil_original = PILImage.open(io.BytesIO(raw))
+            pil_original = PILImage.open(io.BytesIO(raw))  # الصورة الأصلية قد تكون GIF
 
+            # معالجة Otsu (تبقى كما هي لإنتاج الصورة الثنائية)
             frames = []
             try:
                 while True:
@@ -424,150 +333,81 @@ class CaptchaWidget(BoxLayout):
             except EOFError:
                 pass
 
-            if not frames:
+            if not frames:  # إذا لم تكن الصورة GIF أو فشلت قراءة الإطارات
                 bg = np.array(pil_original.convert('RGB'), dtype=np.uint8)
             else:
                 bg = np.median(np.stack(frames), axis=0).astype(np.uint8)
 
             gray = (0.2989 * bg[..., 0] + 0.5870 * bg[..., 1] + 0.1140 * bg[..., 2]).astype(np.uint8)
             hist, _ = np.histogram(gray.flatten(), bins=256, range=(0, 256))
-            total = gray.size; sum_tot = np.dot(np.arange(256), hist)
-            sumB = 0; wB = 0; max_var = 0; thresh = 0
+            total = gray.size;
+            sum_tot = np.dot(np.arange(256), hist)
+            sumB = 0;
+            wB = 0;
+            max_var = 0;
+            thresh = 0
             for i, h in enumerate(hist):
                 wB += h
                 if wB == 0: continue
                 wF = total - wB
                 if wF == 0: break
-                sumB += i * h; mB = sumB / wB; mF = (sum_tot - sumB) / wF
+                sumB += i * h;
+                mB = sumB / wB;
+                mF = (sum_tot - sumB) / wF
                 varBetween = wB * wF * (mB - mF) ** 2
                 if varBetween > max_var: max_var = varBetween; thresh = i
 
+            # 'binary' هي الصورة التي سترسل إلى API
             binary_pil_img = PILImage.fromarray(gray, 'L').point(lambda p: 255 if p > thresh else 0)
 
-            buf = io.BytesIO(); binary_pil_img.save(buf, format='PNG'); buf.seek(0)
+            # عرض الصورة المعالجة في الواجهة (اختياري لكن مفيد للمستخدم)
+            buf = io.BytesIO();
+            binary_pil_img.save(buf, format='PNG');
+            buf.seek(0)
             core_img = CoreImage(buf, ext='png')
             img_w = KivyImage(texture=core_img.texture, size_hint_y=None, height='90dp')
             self.ids.captcha_box.add_widget(img_w)
 
+            # استدعاء دالة التنبؤ الجديدة التي تستخدم API
+            # `binary_pil_img` هي الصورة بعد معالجة Otsu
             pred_text, pre_ms, api_call_ms = self.predict_captcha(binary_pil_img)
 
-            Clock.schedule_once(lambda dt: setattr(self.ids.speed_label, 'text',
-                                                  f"وقت استدعاء الواجهة: {api_call_ms:.2f} مل/ث"), 0)
-            if pred_text is not None:
-                self.update_notification(f"الكابتشا المتوقعة (API): {pred_text}", (0, 0, 1, 1))
+            if pred_text is not None:  # التحقق من أن التنبؤ لم يفشل
+                self.update_notification(f"Predicted CAPTCHA (API): {pred_text}", (0, 0, 1, 1))
+                # تحديث label الوقت ليعكس وقت استدعاء API
+                Clock.schedule_once(lambda dt: setattr(self.ids.speed_label, 'text',
+                                                       f"API Call Time: {api_call_ms:.2f} ms"), 0)
                 self.submit_captcha(pred_text)
+            # else: تم عرض رسالة الخطأ بالفعل من داخل predict_captcha
 
         except Exception as e:
-            self.update_notification(f"خطأ في معالجة/عرض الكابتشا: {e}", (1, 0, 0, 1))
-            import traceback
-            print(f"Detailed error in _display_captcha: {traceback.format_exc()}")
-
+            self.update_notification(f"Error processing/displaying captcha: {e}", (1, 0, 0, 1))
 
     def submit_captcha(self, sol):
-        bar_container = self.ids.success_indicator_bar
-        if not hasattr(self, 'success_bar_color_instruction'):
-             self.success_bar_color_instruction = bar_container.canvas.before.children[0]
-
-        bar_container.height = '0dp'
-        self.success_bar_color_instruction.rgba = (0, 1, 0, 0)
-
         if not self.current_captcha:
-            self.update_notification("خطأ: لا يوجد سياق كابتشا حالي للإرسال.", (1, 0, 0, 1))
+            self.update_notification("Error: No current CAPTCHA context for submission.", (1, 0, 0, 1))
             return
-
         user, pid = self.current_captcha;
         sess = self.accounts[user]["session"]
         url = f"https://api.ecsc.gov.sy:8443/rs/reserve?id={pid}&captcha={sol}"
         try:
-            r = sess.get(url, verify=False, timeout=15)
-            
-            msg_text = f"(الرمز: {r.status_code}) "
-            try:
-                msg_text += r.content.decode('utf-8', errors='replace')
-            except Exception as decode_err:
-                msg_text += f"[خطأ في فك التشفير: {decode_err}] " + str(r.content)
-
-            if r.status_code == 200:
-                col = (0, 1, 0, 1)
-                self.update_notification(f"رد الخادم: {msg_text}", col)
-                bar_container.height = '5dp'
-                self.success_bar_color_instruction.rgba = (0, 1, 0, 1)
-                Clock.schedule_once(self.hide_success_bar, 5)
-            else:
-                col = (1, 0, 0, 1)
-                self.update_notification(f"رد الخادم: {msg_text}", col)
-
-        except requests.exceptions.RequestException as e:
-            self.update_notification(f"خطأ في الإرسال: {e}", (1, 0, 0, 1))
+            r = sess.get(url, verify=False)
+            col = (0, 1, 0, 1) if r.status_code == 200 else (1, 0, 0, 1)
+            msg_text = r.text
+            try:  # محاولة فك تشفير النص إذا كان UTF-8 مع رموز غير صالحة
+                msg_text = r.content.decode('utf-8', errors='replace')
+            except Exception:
+                pass  # استخدام r.text الأصلي إذا فشل الفك
+            self.update_notification(f"Submit response: {msg_text}", col)
         except Exception as e:
-            self.update_notification(f"خطأ غير متوقع في الإرسال: {e}", (1,0,0,1))
-
-    def hide_success_bar(self, dt=None):
-        self.ids.success_indicator_bar.height = '0dp'
-        if hasattr(self, 'success_bar_color_instruction'):
-            self.success_bar_color_instruction.rgba = (0, 1, 0, 0)
+            self.update_notification(f"Submit error: {e}", (1, 0, 0, 1))
 
 
 class CaptchaApp(App):
-    CAPTCHA_API_URL = None 
-
     def build(self):
-        self.load_api_config()
         Builder.load_string(KV)
-        self.root_widget = CaptchaWidget() # Store reference
-        return self.root_widget
-
-    def load_api_config(self):
-        # Use self.user_data_dir for storing app-specific data
-        store_path = os.path.join(self.user_data_dir, 'app_settings.json')
-        self.store = JsonStore(store_path)
-        if self.store.exists('config') and 'api_dynamic_part' in self.store.get('config'):
-            dynamic_part = self.store.get('config')['api_dynamic_part']
-            if dynamic_part and dynamic_part.strip(): # Ensure it's not empty or just whitespace
-                self.CAPTCHA_API_URL = f"https://{dynamic_part.strip()}.pythonanywhere.com/predict"
-                print(f"Using saved API URL: {self.CAPTCHA_API_URL}")
-                return
-        self.CAPTCHA_API_URL = None 
-
-    def on_start(self):
-        if self.CAPTCHA_API_URL is None:
-            self.show_api_config_popup()
-        elif self.root_widget: # If API is already configured, update notification
-             self.root_widget.ids.notification_label.text = "تم تحميل إعدادات الواجهة بنجاح."
-             self.root_widget.ids.notification_label.color = (0,1,0,1)
-
-
-    def _save_and_set_api_url(self, dynamic_part_text, popup_instance):
-        dynamic_part = dynamic_part_text.strip()
-        if not dynamic_part:
-            if hasattr(popup_instance.content, 'error_display_label'):
-                 popup_instance.content.error_display_label.text = "الحقل لا يمكن أن يكون فارغًا!"
-                 popup_instance.content.error_display_label.height = popup_instance.content.error_display_label.texture_size[1]
-            return
-
-        self.store.put('config', api_dynamic_part=dynamic_part)
-        self.CAPTCHA_API_URL = f"https://{dynamic_part}.pythonanywhere.com/predict"
-        print(f"API URL configured to: {self.CAPTCHA_API_URL}")
-        popup_instance.dismiss()
-        
-        if self.root_widget: # self.root is the root widget instance
-            self.root_widget.ids.notification_label.text = "تم تكوين واجهة برمجة التطبيقات بنجاح!"
-            self.root_widget.ids.notification_label.color = (0,1,0,1) # Green
-
-    def show_api_config_popup(self):
-        # Use the KV-defined ApiConfigPopupContent
-        content = Builder.load_string('ApiConfigPopupContent:')
-        
-        popup = Popup(title="إعداد الواجهة", content=content, size_hint=(0.9, 0.6),
-                      auto_dismiss=False, title_font_name='Roboto', title_align='right')
-        
-        # Bind the save button from the content
-        save_button = content.ids.save_button_id
-        save_button.bind(on_press=lambda x: self._save_and_set_api_url(content.api_part_input.text, popup))
-        popup.open()
+        return CaptchaWidget()
 
 
 if __name__ == '__main__':
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     CaptchaApp().run()
