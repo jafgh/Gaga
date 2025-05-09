@@ -4,7 +4,6 @@ import time
 import base64
 import io
 import random
-import re
 import requests  # تأكد من أن requests مثبت
 from PIL import Image as PILImage
 import numpy as np
@@ -29,14 +28,12 @@ from kivy.core.text import LabelBase
 LabelBase.register(name='Arabic', fn_regular=os.path.join('assets', 'arabic.ttf'))
 
 # --------------------------------------------------
-# دالة لإعادة ترتيب النص العربي RTL مع إبقاء الإنجليزية LTR
+# دالة لوضع النص في سياق RTL دون قلب الأحرف، مع الحفاظ على الإنجليزية LTR
 # --------------------------------------------------
-def bidi_reorder(text):
-    parts = re.split(r'([\u0600-\u06FF\s]+)', text)
-    for i, part in enumerate(parts):
-        if re.search(r'[\u0600-\u06FF]', part):
-            parts[i] = part[::-1]
-    return ''.join(parts)
+def wrap_rtl(text):
+    RLE = '\u202B'  # Right-to-Left Embedding
+    PDF = '\u202C'  # Pop Directional Formatting
+    return RLE + text + PDF
 
 # --------------------------------------------------
 # ملف الإعدادات لحفظ جزء الـ API
@@ -80,7 +77,7 @@ KV = '''
             valign: 'middle'
 
     Button:
-        text: 'Add Account'
+        text: wrap_rtl('Add Account')
         size_hint_y: None
         height: '40dp'
         on_press: root.open_add_account_popup()
@@ -103,7 +100,7 @@ KV = '''
 
     Label:
         id: speed_label
-        text: 'API Call Time: 0 ms'
+        text: wrap_rtl('API Call Time: 0 ms')
         size_hint_y: None
         height: '30dp'
         font_size: 12
@@ -128,16 +125,16 @@ class CaptchaWidget(BoxLayout):
 
     def ask_api_prefix(self):
         layout = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        input_box = TextInput(hint_text=bidi_reorder("أدخل معرف API مثل: code"), multiline=False, halign='right')
-        btn = Button(text=bidi_reorder("حفظ ومتابعة"), size_hint_y=None, height='40dp')
+        input_box = TextInput(hint_text=wrap_rtl("أدخل معرف API مثل: code"), multiline=False, halign='right')
+        btn = Button(text=wrap_rtl("حفظ ومتابعة"), size_hint_y=None, height='40dp')
 
         layout.add_widget(Label(
-            text=bidi_reorder("أدخل الجزء المتغير من رابط API:"),
+            text=wrap_rtl("أدخل الجزء المتغير من رابط API:"),
             font_name='Arabic', text_size=(self.width, None), halign='right', valign='middle'))
         layout.add_widget(input_box)
         layout.add_widget(btn)
 
-        popup = Popup(title=bidi_reorder("إعداد API"), content=layout, size_hint=(0.8, 0.4))
+        popup = Popup(title=wrap_rtl("إعداد API"), content=layout, size_hint=(0.8, 0.4))
 
         def on_confirm(instance):
             prefix = input_box.text.strip()
@@ -150,37 +147,27 @@ class CaptchaWidget(BoxLayout):
         btn.bind(on_press=on_confirm)
         popup.open()
 
-    def show_error(self, msg):
-        Popup(
-            title=bidi_reorder('Error'),
-            content=Label(
-                text=bidi_reorder(msg), font_name='Arabic',
-                text_size=(self.width*0.8, None), halign='right', valign='top'
-            ),
-            size_hint=(0.8, 0.4)
-        ).open()
-
     def update_notification(self, msg, color):
         def _update(dt):
             lbl = self.ids.notification_label
-            lbl.text = bidi_reorder(msg)
+            lbl.text = wrap_rtl(msg)
             lbl.color = color
         Clock.schedule_once(_update, 0)
 
     def open_add_account_popup(self):
         content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        user_input = TextInput(hint_text=bidi_reorder('Username'), multiline=False, halign='right')
-        pwd_input = TextInput(hint_text=bidi_reorder('Password'), password=True, multiline=False, halign='right')
+        user_input = TextInput(hint_text=wrap_rtl('Username'), multiline=False, halign='right')
+        pwd_input = TextInput(hint_text=wrap_rtl('Password'), password=True, multiline=False, halign='right')
         btn_layout = BoxLayout(size_hint_y=None, height='40dp', spacing=10)
-        btn_ok = Button(text=bidi_reorder('OK'))
-        btn_cancel = Button(text=bidi_reorder('Cancel'))
+        btn_ok = Button(text=wrap_rtl('OK'))
+        btn_cancel = Button(text=wrap_rtl('Cancel'))
         btn_layout.add_widget(btn_ok)
         btn_layout.add_widget(btn_cancel)
         content.add_widget(user_input)
         content.add_widget(pwd_input)
         content.add_widget(btn_layout)
 
-        popup = Popup(title=bidi_reorder('Add Account'), content=content, size_hint=(0.8, 0.4))
+        popup = Popup(title=wrap_rtl('Add Account'), content=content, size_hint=(0.8, 0.4))
 
         def on_ok(instance):
             u, p = user_input.text.strip(), pwd_input.text.strip()
@@ -270,14 +257,16 @@ class CaptchaWidget(BoxLayout):
     def _create_account_ui(self, user, processes):
         layout = self.ids.accounts_layout
         lbl = Label(
-            text=bidi_reorder(f"Account: {user}"),
-            size_hint_y=None, height='25dp', font_name='Arabic', text_size=(self.width, None), halign='right', valign='middle'
+            text=wrap_rtl(f"Account: {user}"),
+            size_hint_y=None, height='25dp', font_name='Arabic',
+            text_size=(self.width, None), halign='right', valign='middle'
         )
         layout.add_widget(lbl)
 
         for proc in processes:
             pid = proc.get("PROCESS_ID")
-            btn = Button(text=bidi_reorder(proc.get("ZCENTER_NAME", "Unknown")), font_name='Arabic', halign='right')
+            name = proc.get("ZCENTER_NAME", "Unknown")
+            btn = Button(text=wrap_rtl(name), font_name='Arabic', halign='right')
             btn.bind(size=lambda inst, val: setattr(inst, 'text_size', (inst.width, None)))
             prog = ProgressBar(max=1, value=0)
             box = BoxLayout(size_hint_y=None, height='40dp', spacing=5)
@@ -342,7 +331,6 @@ class CaptchaWidget(BoxLayout):
             raw = base64.b64decode(b64)
             pil = PILImage.open(io.BytesIO(raw))
 
-            # معالجة ثنائية للصورة
             gray = np.array(pil.convert('L'))
             thresh = np.median(gray)
             bin_img = PILImage.fromarray((gray > thresh).astype(np.uint8) * 255)
@@ -356,7 +344,7 @@ class CaptchaWidget(BoxLayout):
 
             pred, api_ms = self.predict_captcha(bin_img)
             Clock.schedule_once(lambda dt: setattr(self.ids.speed_label, 'text',
-                                                   bidi_reorder(f"API Call Time: {api_ms:.2f} ms")), 0)
+                                                   wrap_rtl(f"API Call Time: {api_ms:.2f} ms")), 0)
             if pred:
                 self.update_notification(f"Predicted CAPTCHA: {pred}", (0, 0, 1, 1))
                 self.submit_captcha(pred)
@@ -375,14 +363,17 @@ class CaptchaWidget(BoxLayout):
             msg_text = r.text
             success = (r.status_code == 200)
             self.update_notification(f"Submit response: {msg_text}", (0, 1, 0, 1) if success else (1, 0, 0, 1))
-            Popup(
-                title=bidi_reorder("Server Response"),
-                content=Label(
-                    text=bidi_reorder(msg_text), font_name='Arabic',
-                    text_size=(self.width*0.9, None), halign='right', valign='top'
-                ),
-                size_hint=(0.9, 0.6)
-            ).open()
+            # عرض الرد الكامل في نافذة منبثقة مع ارتفاع ديناميكي
+            lbl = Label(
+                text=wrap_rtl(msg_text),
+                font_name='Arabic',
+                text_size=(self.width*0.9, None),
+                halign='right',
+                valign='top',
+                size_hint_y=None
+            )
+            lbl.bind(texture_size=lambda inst, val: setattr(inst, 'height', val[1]))
+            Popup(title=wrap_rtl("Server Response"), content=lbl, size_hint=(0.9, 0.6)).open()
         except Exception as e:
             self.update_notification(f"Submit error: {e}", (1, 0, 0, 1))
 
