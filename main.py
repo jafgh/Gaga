@@ -4,6 +4,7 @@ import time
 import base64
 import io
 import random
+import re
 import requests  # تأكد من أن requests مثبت
 from PIL import Image as PILImage
 import numpy as np
@@ -28,6 +29,16 @@ from kivy.core.text import LabelBase
 LabelBase.register(name='Arabic', fn_regular=os.path.join('assets', 'arabic.ttf'))
 
 # --------------------------------------------------
+# دالة لإعادة ترتيب النص العربي RTL مع إبقاء الإنجليزية LTR
+# --------------------------------------------------
+def bidi_reorder(text):
+    parts = re.split(r'([\u0600-\u06FF\s]+)', text)
+    for i, part in enumerate(parts):
+        if re.search(r'[\u0600-\u06FF]', part):
+            parts[i] = part[::-1]
+    return ''.join(parts)
+
+# --------------------------------------------------
 # ملف الإعدادات لحفظ جزء الـ API
 # --------------------------------------------------
 CONFIG_FILE = "config.txt"
@@ -48,7 +59,7 @@ def save_api_prefix(prefix):
 CAPTCHA_API_URL = None
 
 # --------------------------------------------------
-# تصميم الواجهة باستخدام Kivy
+# تصميم الواجهة باستخدام Kivy مع halign: 'right'
 # --------------------------------------------------
 KV = '''
 <CaptchaWidget>:
@@ -63,8 +74,10 @@ KV = '''
             id: notification_label
             text: ''
             font_size: 14
-            color: 1,1,1,1
             font_name: 'Arabic'
+            text_size: self.width, None
+            halign: 'right'
+            valign: 'middle'
 
     Button:
         text: 'Add Account'
@@ -95,8 +108,10 @@ KV = '''
         height: '30dp'
         font_size: 12
         font_name: 'Arabic'
+        text_size: self.width, None
+        halign: 'right'
+        valign: 'middle'
 '''
-
 
 class CaptchaWidget(BoxLayout):
     def __init__(self, **kwargs):
@@ -104,7 +119,6 @@ class CaptchaWidget(BoxLayout):
         self.accounts = {}
         self.current_captcha = None
 
-        # تحميل أو طلب جزء الـ API عند التشغيل لأول مرة
         api_prefix = load_api_prefix()
         if not api_prefix:
             Clock.schedule_once(lambda dt: self.ask_api_prefix(), 0)
@@ -114,14 +128,16 @@ class CaptchaWidget(BoxLayout):
 
     def ask_api_prefix(self):
         layout = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        input_box = TextInput(hint_text="أدخل معرف API مثل: jafgh", multiline=False)
-        btn = Button(text="حفظ ومتابعة", size_hint_y=None, height='40dp')
+        input_box = TextInput(hint_text=bidi_reorder("أدخل معرف API مثل: code"), multiline=False, halign='right')
+        btn = Button(text=bidi_reorder("حفظ ومتابعة"), size_hint_y=None, height='40dp')
 
-        layout.add_widget(Label(text="أدخل الجزء المتغير من رابط API:", font_name='Arabic'))
+        layout.add_widget(Label(
+            text=bidi_reorder("أدخل الجزء المتغير من رابط API:"),
+            font_name='Arabic', text_size=(self.width, None), halign='right', valign='middle'))
         layout.add_widget(input_box)
         layout.add_widget(btn)
 
-        popup = Popup(title="إعداد API", content=layout, size_hint=(0.8, 0.4))
+        popup = Popup(title=bidi_reorder("إعداد API"), content=layout, size_hint=(0.8, 0.4))
 
         def on_confirm(instance):
             prefix = input_box.text.strip()
@@ -135,28 +151,36 @@ class CaptchaWidget(BoxLayout):
         popup.open()
 
     def show_error(self, msg):
-        Popup(title='Error', content=Label(text=msg, font_name='Arabic'), size_hint=(0.8, 0.4)).open()
+        Popup(
+            title=bidi_reorder('Error'),
+            content=Label(
+                text=bidi_reorder(msg), font_name='Arabic',
+                text_size=(self.width*0.8, None), halign='right', valign='top'
+            ),
+            size_hint=(0.8, 0.4)
+        ).open()
 
     def update_notification(self, msg, color):
         def _update(dt):
             lbl = self.ids.notification_label
-            lbl.text = msg
+            lbl.text = bidi_reorder(msg)
             lbl.color = color
-
         Clock.schedule_once(_update, 0)
 
     def open_add_account_popup(self):
         content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        user_input = TextInput(hint_text='Username', multiline=False)
-        pwd_input = TextInput(hint_text='Password', password=True, multiline=False)
+        user_input = TextInput(hint_text=bidi_reorder('Username'), multiline=False, halign='right')
+        pwd_input = TextInput(hint_text=bidi_reorder('Password'), password=True, multiline=False, halign='right')
         btn_layout = BoxLayout(size_hint_y=None, height='40dp', spacing=10)
-        btn_ok, btn_cancel = Button(text='OK'), Button(text='Cancel')
+        btn_ok = Button(text=bidi_reorder('OK'))
+        btn_cancel = Button(text=bidi_reorder('Cancel'))
         btn_layout.add_widget(btn_ok)
         btn_layout.add_widget(btn_cancel)
         content.add_widget(user_input)
         content.add_widget(pwd_input)
         content.add_widget(btn_layout)
-        popup = Popup(title='Add Account', content=content, size_hint=(0.8, 0.4))
+
+        popup = Popup(title=bidi_reorder('Add Account'), content=content, size_hint=(0.8, 0.4))
 
         def on_ok(instance):
             u, p = user_input.text.strip(), pwd_input.text.strip()
@@ -179,12 +203,17 @@ class CaptchaWidget(BoxLayout):
         return random.choice(ua_list)
 
     def create_session_requests(self, ua):
-        headers = {"User-Agent": ua, "Host": "api.ecsc.gov.sy:8443",
-                   "Accept": "application/json, text/plain, */*", "Accept-Language": "ar,en-US;q=0.7,en;q=0.3",
-                   "Referer": "https://ecsc.gov.sy/login", "Content-Type": "application/json",
-                   "Source": "WEB", "Origin": "https://ecsc.gov.sy", "Connection": "keep-alive",
-                   "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-site",
-                   "Priority": "u=1"}
+        headers = {
+            "User-Agent": ua,
+            "Host": "api.ecsc.gov.sy:8443",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "ar,en-US;q=0.7,en;q=0.3",
+            "Referer": "https://ecsc.gov.sy/login",
+            "Content-Type": "application/json",
+            "Source": "WEB",
+            "Origin": "https://ecsc.gov.sy",
+            "Connection": "keep-alive"
+        }
         sess = requests.Session()
         sess.headers.update(headers)
         return sess
@@ -220,11 +249,17 @@ class CaptchaWidget(BoxLayout):
 
     def fetch_process_ids(self, sess):
         try:
-            r = sess.post("https://api.ecsc.gov.sy:8443/dbm/db/execute",
-                          json={"ALIAS": "OPkUVkYsyq", "P_USERNAME": "WebSite", "P_PAGE_INDEX": 0, "P_PAGE_SIZE": 100},
-                          headers={"Content-Type": "application/json", "Alias": "OPkUVkYsyq",
-                                   "Referer": "https://ecsc.gov.sy/requests", "Origin": "https://ecsc.gov.sy"},
-                          verify=False)
+            r = sess.post(
+                "https://api.ecsc.gov.sy:8443/dbm/db/execute",
+                json={"ALIAS": "OPkUVkYsyq", "P_USERNAME": "WebSite", "P_PAGE_INDEX": 0, "P_PAGE_SIZE": 100},
+                headers={
+                    "Content-Type": "application/json",
+                    "Alias": "OPkUVkYsyq",
+                    "Referer": "https://ecsc.gov.sy/requests",
+                    "Origin": "https://ecsc.gov.sy"
+                },
+                verify=False
+            )
             if r.status_code == 200:
                 return r.json().get("P_RESULT", [])
             self.update_notification(f"Fetch IDs failed ({r.status_code})", (1, 0, 0, 1))
@@ -234,17 +269,24 @@ class CaptchaWidget(BoxLayout):
 
     def _create_account_ui(self, user, processes):
         layout = self.ids.accounts_layout
-        layout.add_widget(Label(text=f"Account: {user}", size_hint_y=None, height='25dp', font_name='Arabic'))
+        lbl = Label(
+            text=bidi_reorder(f"Account: {user}"),
+            size_hint_y=None, height='25dp', font_name='Arabic', text_size=(self.width, None), halign='right', valign='middle'
+        )
+        layout.add_widget(lbl)
+
         for proc in processes:
             pid = proc.get("PROCESS_ID")
-            btn = Button(text=proc.get("ZCENTER_NAME", "Unknown"), font_name='Arabic')
+            btn = Button(text=bidi_reorder(proc.get("ZCENTER_NAME", "Unknown")), font_name='Arabic', halign='right')
+            btn.bind(size=lambda inst, val: setattr(inst, 'text_size', (inst.width, None)))
             prog = ProgressBar(max=1, value=0)
             box = BoxLayout(size_hint_y=None, height='40dp', spacing=5)
             box.add_widget(btn)
             box.add_widget(prog)
             layout.add_widget(box)
-            btn.bind(on_press=lambda inst, u=user, p=pid, pr=prog: threading.Thread(target=self._handle_captcha,
-                                                                                    args=(u, p, pr)).start())
+            btn.bind(on_press=lambda inst, u=user, p=pid, pr=prog: threading.Thread(
+                target=self._handle_captcha, args=(u, p, pr)
+            ).start())
 
     def _handle_captcha(self, user, pid, prog):
         Clock.schedule_once(lambda dt: setattr(prog, 'value', 0), 0)
@@ -284,110 +326,70 @@ class CaptchaWidget(BoxLayout):
             response.raise_for_status()
             api_response = response.json()
             predicted_text = api_response.get("result")
-            if predicted_text is None:
-                self.update_notification(f"API Error: Prediction result is missing or null.", (1, 0.5, 0, 1))
-                return None, 0, (time.time() - t_api_start) * 1000
             total_api_time_ms = (time.time() - t_api_start) * 1000
-            return predicted_text, 0, total_api_time_ms
-        except requests.exceptions.Timeout:
-            self.update_notification(f"API Request Error: Timeout connecting to {CAPTCHA_API_URL}", (1, 0, 0, 1))
-            return None, 0, (time.time() - t_api_start) * 1000
-        except requests.exceptions.ConnectionError:
-            self.update_notification(f"API Request Error: Could not connect to {CAPTCHA_API_URL}", (1, 0, 0, 1))
-            return None, 0, (time.time() - t_api_start) * 1000
-        except requests.exceptions.RequestException as e:
-            self.update_notification(f"API Request Error: {e}", (1, 0, 0, 1))
-            return None, 0, (time.time() - t_api_start) * 1000
-        except ValueError as e:
-            self.update_notification(f"API Response Error: Invalid JSON received. {e}", (1, 0, 0, 1))
-            return None, 0, (time.time() - t_api_start) * 1000
+            if predicted_text is None:
+                self.update_notification("API Error: Prediction result missing.", (1, 0.5, 0, 1))
+                return None, total_api_time_ms
+            return predicted_text, total_api_time_ms
         except Exception as e:
-            self.update_notification(f"Error calling prediction API: {e}", (1, 0, 0, 1))
-            return None, 0, (time.time() - t_api_start) * 1000
+            self.update_notification(f"API Request Error: {e}", (1, 0, 0, 1))
+            return None, (time.time() - t_api_start) * 1000
 
     def _display_captcha(self, b64data):
         try:
             self.ids.captcha_box.clear_widgets()
             b64 = b64data.split(',')[1] if ',' in b64data else b64data
             raw = base64.b64decode(b64)
-            pil_original = PILImage.open(io.BytesIO(raw))
+            pil = PILImage.open(io.BytesIO(raw))
 
-            frames = []
-            try:
-                while True:
-                    frames.append(np.array(pil_original.convert('RGB'), dtype=np.uint8))
-                    pil_original.seek(pil_original.tell() + 1)
-            except EOFError:
-                pass
-
-            if frames:
-                bg = np.median(np.stack(frames), axis=0).astype(np.uint8)
-            else:
-                bg = np.array(pil_original.convert('RGB'), dtype=np.uint8)
-
-            gray = (0.2989 * bg[..., 0] + 0.5870 * bg[..., 1] + 0.1140 * bg[..., 2]).astype(np.uint8)
-            hist, _ = np.histogram(gray.flatten(), bins=256, range=(0, 256))
-            total = gray.size
-            sum_tot = np.dot(np.arange(256), hist)
-            sumB = 0
-            wB = 0
-            max_var = 0
-            thresh = 0
-            for i, h in enumerate(hist):
-                wB += h
-                if wB == 0:
-                    continue
-                wF = total - wB
-                if wF == 0:
-                    break
-                sumB += i * h
-                mB = sumB / wB
-                mF = (sum_tot - sumB) / wF
-                varBetween = wB * wF * (mB - mF) ** 2
-                if varBetween > max_var:
-                    max_var = varBetween
-                    thresh = i
-
-            binary_pil_img = PILImage.fromarray(gray, 'L').point(lambda p: 255 if p > thresh else 0)
+            # معالجة ثنائية للصورة
+            gray = np.array(pil.convert('L'))
+            thresh = np.median(gray)
+            bin_img = PILImage.fromarray((gray > thresh).astype(np.uint8) * 255)
 
             buf = io.BytesIO()
-            binary_pil_img.save(buf, format='PNG')
+            bin_img.save(buf, format='PNG')
             buf.seek(0)
-            core_img = CoreImage(buf, ext='png')
-            img_w = KivyImage(texture=core_img.texture, size_hint_y=None, height='90dp')
+            core = CoreImage(buf, ext='png')
+            img_w = KivyImage(texture=core.texture, size_hint_y=None, height='90dp')
             self.ids.captcha_box.add_widget(img_w)
 
-            pred_text, pre_ms, api_call_ms = self.predict_captcha(binary_pil_img)
-
-            if pred_text is not None:
-                self.update_notification(f"Predicted CAPTCHA (API): {pred_text}", (0, 0, 1, 1))
-                Clock.schedule_once(lambda dt: setattr(self.ids.speed_label, 'text',
-                                                       f"API Call Time: {api_call_ms:.2f} ms"), 0)
-                self.submit_captcha(pred_text)
+            pred, api_ms = self.predict_captcha(bin_img)
+            Clock.schedule_once(lambda dt: setattr(self.ids.speed_label, 'text',
+                                                   bidi_reorder(f"API Call Time: {api_ms:.2f} ms")), 0)
+            if pred:
+                self.update_notification(f"Predicted CAPTCHA: {pred}", (0, 0, 1, 1))
+                self.submit_captcha(pred)
         except Exception as e:
-            self.update_notification(f"Error processing/displaying captcha: {e}", (1, 0, 0, 1))
+            self.update_notification(f"Error processing captcha: {e}", (1, 0, 0, 1))
 
     def submit_captcha(self, sol):
         if not self.current_captcha:
-            self.update_notification("Error: No current CAPTCHA context for submission.", (1, 0, 0, 1))
+            self.update_notification("Error: No CAPTCHA context.", (1, 0, 0, 1))
             return
         user, pid = self.current_captcha
         sess = self.accounts[user]["session"]
         url = f"https://api.ecsc.gov.sy:8443/rs/reserve?id={pid}&captcha={sol}"
         try:
             r = sess.get(url, verify=False)
-            col = (0, 1, 0, 1) if r.status_code == 200 else (1, 0, 0, 1)
-            msg_text = r.content.decode('utf-8', errors='replace')
-            self.update_notification(f"Submit response: {msg_text}", col)
+            msg_text = r.text
+            success = (r.status_code == 200)
+            self.update_notification(f"Submit response: {msg_text}", (0, 1, 0, 1) if success else (1, 0, 0, 1))
+            Popup(
+                title=bidi_reorder("Server Response"),
+                content=Label(
+                    text=bidi_reorder(msg_text), font_name='Arabic',
+                    text_size=(self.width*0.9, None), halign='right', valign='top'
+                ),
+                size_hint=(0.9, 0.6)
+            ).open()
         except Exception as e:
             self.update_notification(f"Submit error: {e}", (1, 0, 0, 1))
-
 
 class CaptchaApp(App):
     def build(self):
         Builder.load_string(KV)
         return CaptchaWidget()
-
 
 if __name__ == '__main__':
     CaptchaApp().run()
