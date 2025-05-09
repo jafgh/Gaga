@@ -10,13 +10,13 @@ package.domain = org.example
 # (str) Source code where the main.py live
 source.dir = .
 
-# (str) Application version (إلزامي)
+# (str) Application version
 version = 1.0.0
 
 # (list) Application requirements
-requirements = python3,kivy,requests,Pillow,numpy,python-bidi,arabic-reshaper
+requirements = python3,kivy,requests,Pillow,numpy,python-bidi,arabic-reshaper,configparser
 
-# (str) Supported orientation (portrait, landscape or all)
+# (str) Supported orientation
 orientation = portrait
 
 # (bool) Fullscreen or not
@@ -35,19 +35,19 @@ android.accept_sdk_license = True
 # (bool) Accept Android “android” and “build-tools” licenses automatically
 android.accept_android_licenses = True
 
-# (int) Android API to use for compiling (≥ 30 مطلوب لنشر Google Play)
+# (int) Android API to use for compiling
 android.api = 33
 
 # (int) Minimum Android API your APK will support
 android.minapi = 21
 
-# (str) Android NDK version to use (≥ 25b)
+# (str) Android NDK version to use
 android.ndk = 25b
 
 # (str) Android build tools version
 android.build_tools_version = 36.0.0
 
-# (bool) Skip automatic SDK updates (False للسماح بالتحديثات)
+# (bool) Skip automatic SDK updates
 android.skip_update = False
 
 # -----------------------------------------------------------------------------
@@ -57,5 +57,5 @@ android.skip_update = False
 # (int) verbosity: 0 normal, 1 warning, 2 info, 3 debug
 log_level = 2
 
-# (bool) Clean build: يمسح مجلد .buildozer و bin/ قبل البناء
+# (bool) Clean build before starting
 clean_build = True
