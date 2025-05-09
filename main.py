@@ -77,7 +77,7 @@ KV = '''
             valign: 'middle'
 
     Button:
-        text: wrap_rtl('Add Account')
+        text: root.wrap_rtl('Add Account')
         size_hint_y: None
         height: '40dp'
         on_press: root.open_add_account_popup()
@@ -100,7 +100,7 @@ KV = '''
 
     Label:
         id: speed_label
-        text: wrap_rtl('API Call Time: 0 ms')
+        text: root.wrap_rtl('API Call Time: 0 ms')
         size_hint_y: None
         height: '30dp'
         font_size: 12
@@ -122,6 +122,9 @@ class CaptchaWidget(BoxLayout):
         else:
             global CAPTCHA_API_URL
             CAPTCHA_API_URL = f"https://{api_prefix}.pythonanywhere.com/predict"
+
+    def wrap_rtl(self, text):
+        return wrap_rtl(text)
 
     def ask_api_prefix(self):
         layout = BoxLayout(orientation='vertical', spacing=10, padding=10)
@@ -258,8 +261,7 @@ class CaptchaWidget(BoxLayout):
         layout = self.ids.accounts_layout
         lbl = Label(
             text=wrap_rtl(f"Account: {user}"),
-            size_hint_y=None, height='25dp', font_name='Arabic',
-            text_size=(self.width, None), halign='right', valign='middle'
+            size_hint_y=None, height='25dp', font_name='Arabic', text_size=(self.width, None), halign='right', valign='middle'
         )
         layout.add_widget(lbl)
 
@@ -363,7 +365,6 @@ class CaptchaWidget(BoxLayout):
             msg_text = r.text
             success = (r.status_code == 200)
             self.update_notification(f"Submit response: {msg_text}", (0, 1, 0, 1) if success else (1, 0, 0, 1))
-            # عرض الرد الكامل في نافذة منبثقة مع ارتفاع ديناميكي
             lbl = Label(
                 text=wrap_rtl(msg_text),
                 font_name='Arabic',
