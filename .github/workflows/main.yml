@@ -1,47 +1,43 @@
 name: Build Android APK
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: [push,pull_request]
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
-
     env:
-      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
+      ANDROIDSDK_ROOT: ${{ runner.tool_cache }}/Android/Sdk
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '8'
 
       - name: Install apt dependencies
-        run: |
-          sudo apt-get update
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
-            git zip unzip openjdk-17-jdk python3-pip \
-            autoconf automake libtool m4 libltdl-dev \
-            zlib1g-dev libncurses-dev \
-            cmake libffi-dev libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y \
+              libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+              libgl1-mesa-dev libgles2-mesa-dev zlib1g-dev libfreetype6-dev
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
+      - name: Set up Android SDK & NDK
+        uses: subosito/android-sdk@2.1.1
         with:
-          python-version: '3.10'
+          api-level: 33
+          build-tools: '33.0.2'
+          ndk: '25b'
 
-      - name: Install Buildozer & dependencies
+      - name: Install Buildozer & Cython
         run: |
-          python -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install --upgrade pip setuptools wheel
           pip install Cython==0.29.33 buildozer
 
-      - name: Build APK with Buildozer
+      - name: Build APK
         run: buildozer android debug --verbose < /dev/null
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MyCaptchaApp-APK
           path: bin/**/*.apk
-
