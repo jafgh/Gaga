@@ -4,9 +4,10 @@ import time
 import base64
 import io
 import random
-import requests  # تأكد من أن requests مثبت
+import requests
 from PIL import Image as PILImage
 import numpy as np
+
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
@@ -17,81 +18,75 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
+from kivy.uix.image import Image as KivyImage
 from kivy.clock import Clock
-from kivy.core.text import LabelBase
+from kivy.core.image import Image as CoreImage
+from kivy.storage.jsonstore import JsonStore
+# StringProperty, NumericProperty removed as full language switching is removed
 
-# ---------------------
-# تسجيل خط Arabic من ملف assets/arabic.ttf
-# ---------------------
-LabelBase.register(name='Arabic', fn_regular=os.path.join('assets', 'arabic.ttf'))
+# --- مكتبة لدعم عرض النصوص العربية بشكل صحيح ---
+from bidi.algorithm import get_display
 
-# ---------------------
-# دالة لوضع النص في سياق RTL دون قلب الأحرف، مع الحفاظ على الإنجليزية LTR
-# ---------------------
-def wrap_rtl(text):
-    RLE = '\u202B'  # Right-to-Left Embedding
-    PDF = '\u202C'  # Pop Directional Formatting
-    return RLE + text + PDF
+# --- تعريف الخط الافتراضي ---
+# تأكد من أن هذا الخط مثبت على نظامك ويدعم العربية والإنجليزية بشكل جيد
+DEFAULT_FONT_NAME = 'Arial'  # أو Tahoma, Noto Sans, etc.
 
-# ---------------------
-# ملف الإعدادات لحفظ جزء الـ API
-# ---------------------
-CONFIG_FILE = "config.txt"
 
-def load_api_prefix():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    return None
+# --- وظيفة مساعدة للتحقق مما إذا كان النص عربيًا ---
+def is_arabic_string(text_string):
+    if isinstance(text_string, str):
+        # تحقق من وجود أحرف في نطاق اليونيكود العربي
+        return any("\u0600" <= char <= "\u06FF" for char in text_string)
+    return False
 
-def save_api_prefix(prefix):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        f.write(prefix)
 
-# ---------------------
-# رابط الـ CAPTCHA API (سيُعدل عند التشغيل)
-# ---------------------
-CAPTCHA_API_URL = None
-
-# ---------------------
-# تصميم الواجهة باستخدام Kivy مع halign: 'right'
-# ---------------------
+# --------------------------------------------------
+# تصميم الواجهة باستخدام Kivy (النصوص الآن بالإنجليزية)
+# --------------------------------------------------
 KV = '''
+#:import App kivy.app.App
+
+<BaseLabel@Label>: # For labels that might display Arabic from API
+    font_name: App.get_running_app().DEFAULT_FONT_NAME
+    # halign and text_language will be set in Python if content is Arabic
+
+<EnglishLabel@Label>: # For static English labels
+    font_name: App.get_running_app().DEFAULT_FONT_NAME
+    halign: 'left'
+
+<EnglishButton@Button>:
+    font_name: App.get_running_app().DEFAULT_FONT_NAME
+
+<EnglishTextInput@TextInput>:
+    font_name: App.get_running_app().DEFAULT_FONT_NAME
+    halign: 'left'
+    write_tab: False
+
 <CaptchaWidget>:
     orientation: 'vertical'
     padding: 10
     spacing: 10
 
-    # شريط حالة استجابة الخادم (مخفي افتراضيًا)
     BoxLayout:
-        id: status_bar
         size_hint_y: None
-        height: '6dp'
-        canvas.before:
-            Color:
-                rgba: (0, 1, 0, 1) if root.success_status else (1, 0, 0, 1)
-            Rectangle:
-                pos: self.pos
-                size: self.size
-        opacity: 0
+        height: '30dp'
+        BaseLabel: # This label will display API responses, could be Arabic
+            id: notification_label
+            text: '' # Default empty
+            font_size: '16sp'
+            color: 1,1,1,1
 
-    # اشعارات
-    Label:
-        id: notification_label
-        size_hint_y: None
-        height: '60dp'
-        text: ''
-        font_size: 16
-        font_name: 'Arabic'
-        text_size: self.width, None
-        halign: 'right'
-        valign: 'middle'
-
-    Button:
-        text: root.wrap_rtl('Add Account / إضافة حساب')
+    EnglishButton:
+        text: 'Add Account'
         size_hint_y: None
         height: '40dp'
         on_press: root.open_add_account_popup()
+
+    BoxLayout:
+        id: captcha_box
+        orientation: 'vertical'
+        size_hint_y: None
+        height: self.minimum_height
 
     ScrollView:
         GridLayout:
@@ -100,74 +95,117 @@ KV = '''
             size_hint_y: None
             height: self.minimum_height
             row_default_height: '40dp'
+            row_force_default: False
             spacing: 5
 
-    Label:
+    EnglishLabel: # Static English label
         id: speed_label
+        text: 'API Call Time: 0.00 ms'
         size_hint_y: None
         height: '30dp'
-        text: root.wrap_rtl('API Call Time: 0 ms')
-        font_size: 14
-        font_name: 'Arabic'
+        font_size: '13sp'
+
+<StartCodeInputWidget>:
+    orientation: 'vertical'
+    padding: 30
+    spacing: 15
+    EnglishLabel:
+        text: 'Please enter your API Start Code (e.g., jafgh or 55542):'
+        font_size: '20sp'
+        halign: 'center'
         text_size: self.width, None
-        halign: 'right'
-        valign: 'middle'
+    EnglishTextInput:
+        id: start_code_input
+        hint_text: 'Start Code here'
+        multiline: False
+        font_size: '18sp'
+        halign: 'center'
+    EnglishButton:
+        text: 'Save and Start'
+        font_size: '18sp'
+        size_hint_y: None
+        height: '50dp'
+        on_press: app.save_start_code_and_load_main_app(start_code_input.text)
 '''
 
+
 class CaptchaWidget(BoxLayout):
-    def __init__(self, **kwargs):
+    def __init__(self, captcha_api_url_dynamic, **kwargs):
+        self.app = App.get_running_app()
         super().__init__(**kwargs)
+        self.captcha_api_url = captcha_api_url_dynamic
         self.accounts = {}
         self.current_captcha = None
-        self.success_status = False
 
-        api_prefix = load_api_prefix()
-        if not api_prefix:
-            Clock.schedule_once(lambda dt: self.ask_api_prefix(), 0)
-        else:
-            global CAPTCHA_API_URL
-            CAPTCHA_API_URL = f"https://{api_prefix}.pythonanywhere.com/predict"
+    def show_error(self, msg_text_raw):  # Takes raw English message
+        # If msg_text_raw itself could be Arabic, then process it
+        # For now, assuming error messages generated by app are English
+        display_text = msg_text_raw
+        halign = 'left'
+        text_lang = None
 
-    def wrap_rtl(self, text):
-        return wrap_rtl(text)
+        if is_arabic_string(msg_text_raw):  # If the message from server is Arabic
+            display_text = get_display(msg_text_raw)
+            halign = 'right'
+            text_lang = 'ar'
 
-    def update_notification(self, msg, color, success=False):
+        content_label = Label(text=display_text, font_name=self.app.DEFAULT_FONT_NAME,
+                              halign=halign, text_language=text_lang)
+        popup = Popup(title='Error', content=content_label,
+                      size_hint=(0.8, 0.4), title_font=self.app.DEFAULT_FONT_NAME)
+        popup.open()
+
+    def update_notification(self, raw_message_text, color=(1, 1, 1, 1)):
+        display_text = raw_message_text
+        halign = 'left'
+        text_lang = None  # Default for English
+
+        if is_arabic_string(raw_message_text):
+            display_text = get_display(raw_message_text)
+            halign = 'right'
+            text_lang = 'ar'
+
         def _update(dt):
             lbl = self.ids.notification_label
-            lbl.text = wrap_rtl(msg)
-            lbl.color = color
-            # تحديث شريط الحالة
-            bar = self.ids.status_bar
-            bar.opacity = 1
-            bar.canvas.before.children[1].rgba = (0,1,0,1) if success else (1,0,0,1)
-            # إخفاء بعد ثانيتين
-            Clock.schedule_once(lambda dt: setattr(bar, 'opacity', 0), 2)
+            if lbl:
+                lbl.text = display_text
+                lbl.font_name = self.app.DEFAULT_FONT_NAME
+                lbl.halign = halign
+                if text_lang:  # Only set if specific (e.g. 'ar')
+                    lbl.text_language = text_lang
+                else:  # Reset to default if not Arabic
+                    lbl.text_language = ""  # Or Kivy's default
+                lbl.color = color
+
         Clock.schedule_once(_update, 0)
 
-     def open_add_account_popup(self):
+    def open_add_account_popup(self):
         content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        user_input = TextInput(hint_text=wrap_rtl('Username'), multiline=False, halign='right')
-        pwd_input = TextInput(hint_text=wrap_rtl('Password'), password=True, multiline=False, halign='right')
+        user_input = TextInput(hint_text='Username', multiline=False,
+                               font_name=self.app.DEFAULT_FONT_NAME, halign='left', write_tab=False)
+        pwd_input = TextInput(hint_text='Password', password=True, multiline=False,
+                              font_name=self.app.DEFAULT_FONT_NAME, halign='left', write_tab=False)
         btn_layout = BoxLayout(size_hint_y=None, height='40dp', spacing=10)
-        btn_ok = Button(text=wrap_rtl('OK'))
-        btn_cancel = Button(text=wrap_rtl('Cancel'))
+        btn_ok = Button(text='OK', font_name=self.app.DEFAULT_FONT_NAME)
+        btn_cancel = Button(text='Cancel', font_name=self.app.DEFAULT_FONT_NAME)
         btn_layout.add_widget(btn_ok)
         btn_layout.add_widget(btn_cancel)
         content.add_widget(user_input)
         content.add_widget(pwd_input)
         content.add_widget(btn_layout)
 
-        popup = Popup(title=wrap_rtl('Add Account'), content=content, size_hint=(0.8, 0.4))
+        popup = Popup(title='Add Account', content=content, size_hint=(0.8, 0.5),
+                      title_font=self.app.DEFAULT_FONT_NAME)
+        popup.open()
 
         def on_ok(instance):
             u, p = user_input.text.strip(), pwd_input.text.strip()
             popup.dismiss()
             if u and p:
-                threading.Thread(target=self.add_account, args=(u, p)).start()
+                threading.Thread(target=self.add_account, args=(u, p), daemon=True).start()
 
         btn_ok.bind(on_press=on_ok)
         btn_cancel.bind(on_press=lambda x: popup.dismiss())
-        popup.open()
 
     def generate_user_agent(self):
         ua_list = [
@@ -180,17 +218,13 @@ class CaptchaWidget(BoxLayout):
         return random.choice(ua_list)
 
     def create_session_requests(self, ua):
-        headers = {
-            "User-Agent": ua,
-            "Host": "api.ecsc.gov.sy:8443",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "ar,en-US;q=0.7,en;q=0.3",
-            "Referer": "https://ecsc.gov.sy/login",
-            "Content-Type": "application/json",
-            "Source": "WEB",
-            "Origin": "https://ecsc.gov.sy",
-            "Connection": "keep-alive"
-        }
+        headers = {"User-Agent": ua, "Host": "api.ecsc.gov.sy:8443",
+                   "Accept": "application/json, text/plain, */*", "Accept-Language": "ar,en-US;q=0.7,en;q=0.3",
+                   # Server might use this
+                   "Referer": "https://ecsc.gov.sy/login", "Content-Type": "application/json",
+                   "Source": "WEB", "Origin": "https://ecsc.gov.sy", "Connection": "keep-alive",
+                   "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-site",
+                   "Priority": "u=1"}
         sess = requests.Session()
         sess.headers.update(headers)
         return sess
@@ -198,154 +232,306 @@ class CaptchaWidget(BoxLayout):
     def add_account(self, user, pwd):
         sess = self.create_session_requests(self.generate_user_agent())
         t0 = time.time()
-        if not self.login(user, pwd, sess):
-            self.update_notification(f"Login failed for {user}", (1, 0, 0, 1))
+        login_success, login_message_raw = self.login(user, pwd, sess)
+        if not login_success:
+            # login_message_raw is already English or potentially Arabic from server
+            self.update_notification(f"Login failed for {user}: {login_message_raw}", color=(1, 0, 0, 1))
             return
-        self.update_notification(f"Logged in {user} in {time.time() - t0:.2f}s", (0, 1, 0, 1))
+        time_taken = time.time() - t0
+        self.update_notification(f"Logged in {user} in {time_taken:.2f}s", color=(0, 1, 0, 1))
         self.accounts[user] = {"password": pwd, "session": sess}
         procs = self.fetch_process_ids(sess)
         if procs:
             Clock.schedule_once(lambda dt: self._create_account_ui(user, procs), 0)
         else:
-            self.update_notification(f"Can't fetch process IDs for {user}", (1, 0, 0, 1))
+            self.update_notification(f"Can't fetch process IDs for {user}", color=(1, 0, 0, 1))
 
-    def login(self, user, pwd, sess, retries=3):
+    def login(self, user, pwd, sess, retries=3):  # Returns raw messages
         url = "https://api.ecsc.gov.sy:8443/secure/auth/login"
-        for _ in range(retries):
+        for i in range(retries):
             try:
-                r = sess.post(url, json={"username": user, "password": pwd}, verify=False)
+                r = sess.post(url, json={"username": user, "password": pwd}, verify=False, timeout=15)
                 if r.status_code == 200:
-                    self.update_notification("Login successful.", (0, 1, 0, 1))
-                    return True
-                self.update_notification(f"Login failed ({r.status_code})", (1, 0, 0, 1))
-                return False
-            except Exception as e:
-                self.update_notification(f"Login error: {e}", (1, 0, 0, 1))
-                return False
-        return False
+                    # App-generated message is English
+                    self.update_notification("Login successful.", color=(0, 1, 0, 1))
+                    return True, "Login successful."
+
+                error_message_text = r.text  # Default to raw text
+                try:
+                    # Try to get specific message if JSON, could be Arabic or English
+                    error_message_text = r.json().get("message", r.text)
+                except ValueError:
+                    pass  # Not JSON, use raw text
+
+                # The message passed to update_notification will be processed there for bidi
+                self.update_notification(f"Login failed ({r.status_code}): {error_message_text}", color=(1, 0, 0, 1))
+                return False, f"Status {r.status_code}: {error_message_text}"
+            except requests.exceptions.Timeout:
+                msg = f"Login error: Connection timed out (Attempt {i + 1})"
+                self.update_notification(msg, color=(1, 0, 0, 1))
+                if i == retries - 1: return False, "Connection timed out"
+            except requests.exceptions.RequestException as e:
+                msg = f"Login error: {e}"
+                self.update_notification(msg, color=(1, 0, 0, 1))
+                return False, str(e)
+            time.sleep(0.5)
+        return False, "Login failed after multiple attempts"
 
     def fetch_process_ids(self, sess):
         try:
-            r = sess.post(
-                "https://api.ecsc.gov.sy:8443/dbm/db/execute",
-                json={"ALIAS": "OPkUVkYsyq", "P_USERNAME": "WebSite", "P_PAGE_INDEX": 0, "P_PAGE_SIZE": 100},
-                headers={
-                    "Content-Type": "application/json",
-                    "Alias": "OPkUVkYsyq",
-                    "Referer": "https://ecsc.gov.sy/requests",
-                    "Origin": "https://ecsc.gov.sy"
-                },
-                verify=False
-            )
+            r = sess.post("https://api.ecsc.gov.sy:8443/dbm/db/execute",
+                          json={"ALIAS": "OPkUVkYsyq", "P_USERNAME": "WebSite", "P_PAGE_INDEX": 0, "P_PAGE_SIZE": 100},
+                          headers={"Content-Type": "application/json", "Alias": "OPkUVkYsyq",
+                                   "Referer": "https://ecsc.gov.sy/requests", "Origin": "https://ecsc.gov.sy"},
+                          verify=False, timeout=15)
             if r.status_code == 200:
-                return r.json().get("P_RESULT", [])
-            self.update_notification(f"Fetch IDs failed ({r.status_code})", (1, 0, 0, 1))
-        except Exception as e:
-            self.update_notification(f"Error fetching IDs: {e}", (1, 0, 0, 1))
+                return r.json().get("P_RESULT", [])  # This P_RESULT can contain Arabic ZCENTER_NAME
+            self.update_notification(f"Fetch IDs failed ({r.status_code})", color=(1, 0, 0, 1))
+        except requests.exceptions.Timeout:
+            self.update_notification("Error fetching IDs: Connection timed out", color=(1, 0, 0, 1))
+        except requests.exceptions.RequestException as e:
+            self.update_notification(f"Error fetching IDs: {e}", color=(1, 0, 0, 1))
         return []
 
     def _create_account_ui(self, user, processes):
         layout = self.ids.accounts_layout
-        lbl = Label(
-            text=wrap_rtl(f"Account: {user}"),
-            size_hint_y=None, height='25dp', font_name='Arabic', text_size=(self.width, None), halign='right', valign='middle'
-        )
-        layout.add_widget(lbl)
+        if not layout: return
 
+        # Account label is English
+        layout.add_widget(Label(text=f"Account: {user}", size_hint_y=None, height='25dp',
+                                font_name=self.app.DEFAULT_FONT_NAME, halign='left'))
         for proc in processes:
             pid = proc.get("PROCESS_ID")
-            name = proc.get("ZCENTER_NAME", "Unknown")
-            btn = Button(text=wrap_rtl(name), font_name='Arabic', halign='right')
-            btn.bind(size=lambda inst, val: setattr(inst, 'text_size', (inst.width, None)))
+            center_name_raw = proc.get("ZCENTER_NAME", "Unknown Center")  # Default English
+
+            # Process center_name_raw for display
+            # If center_name_raw is Arabic, get_display will shape it.
+            # The button text will combine this with English " (ID: pid)".
+            # Modern text renderers usually handle mixed LTR/RTL okay if shaped parts are correct.
+            center_name_display = get_display(center_name_raw) if is_arabic_string(center_name_raw) else center_name_raw
+
+            btn_text = f"{center_name_display} (ID: {pid})" if pid else center_name_display
+            # If center_name_display is Arabic, the whole string might need bidi processing
+            # for correct display if the context is complex. For simple append, it might be okay.
+            # For robustness with mixed strings:
+            if is_arabic_string(center_name_raw):  # if the name part is Arabic
+                btn_text = get_display(f"{center_name_raw} (ID: {pid})") if pid else get_display(center_name_raw)
+            else:  # name part is English
+                btn_text = f"{center_name_raw} (ID: {pid})" if pid else center_name_raw
+
+            btn = Button(text=btn_text, font_name=self.app.DEFAULT_FONT_NAME)
             prog = ProgressBar(max=1, value=0)
             box = BoxLayout(size_hint_y=None, height='40dp', spacing=5)
-            box.add_widget(btn)
+            box.add_widget(btn);
             box.add_widget(prog)
             layout.add_widget(box)
-            btn.bind(on_press=lambda inst, u=user, p=pid, pr=prog: threading.Thread(
-                target=self._handle_captcha, args=(u, p, pr)
-            ).start())
+            btn.bind(on_press=lambda inst, u=user, p_id=pid, pr=prog: threading.Thread(target=self._handle_captcha,
+                                                                                       args=(u, p_id, pr),
+                                                                                       daemon=True).start())
 
     def _handle_captcha(self, user, pid, prog):
-        Clock.schedule_once(lambda dt: setattr(prog, 'value', 0), 0)
-        data = self.get_captcha(self.accounts[user]["session"], pid, user)
-        Clock.schedule_once(lambda dt: setattr(prog, 'value', prog.max), 0)
-        if data:
-            self.current_captcha = (user, pid)
-            Clock.schedule_once(lambda dt: self._display_captcha(data), 0)
+        if pid is None:
+            self.update_notification("Error: Process ID is missing.", color=(1, 0, 0, 1))  # English error
+            return
 
-    def get_captcha(self, sess, pid, user):
+        Clock.schedule_once(lambda dt: setattr(prog, 'value', 0), 0)
+        captcha_data = self.get_captcha(self.accounts[user]["session"], pid, user)
+        Clock.schedule_once(lambda dt: setattr(prog, 'value', prog.max), 0)
+        if captcha_data:
+            self.current_captcha = (user, pid)
+            Clock.schedule_once(lambda dt: self._display_captcha(captcha_data), 0)
+
+    def get_captcha(self, sess, pid, user):  # Internal messages in English
         url = f"https://api.ecsc.gov.sy:8443/captcha/get/{pid}"
         try:
-            while True:
-                r = sess.get(url, verify=False)
-                if r.status_code == 200:
-                    return r.json().get("file")
+            retries = 0;
+            max_retries = 5
+            while retries < max_retries:
+                r = sess.get(url, verify=False, timeout=10)
+                if r.status_code == 200: return r.json().get("file")
                 if r.status_code == 429:
-                    time.sleep(0.1)
+                    self.update_notification("Rate limit exceeded, waiting...", color=(1, 0.5, 0, 1))
+                    time.sleep(random.uniform(0.5, 1.5))
                 elif r.status_code in (401, 403):
-                    if not self.login(user, self.accounts[user]["password"], sess):
+                    self.update_notification("Invalid session, attempting re-login...", color=(1, 0.5, 0, 1))
+                    login_success, _ = self.login(user, self.accounts[user]["password"], sess)
+                    if not login_success:
+                        self.update_notification(f"Re-login failed for {user}", color=(1, 0, 0, 1))
                         return None
+                    retries += 1
                 else:
-                    self.update_notification(f"Server error: {r.status_code}", (1, 0, 0, 1))
+                    error_message_text = r.text  # Default to raw text
+                    try:
+                        # Try to get specific message if JSON, could be Arabic or English
+                        error_message_text = r.json().get("message", r.text)
+                    except ValueError:
+                        pass
+                    self.update_notification(f"Server response: {r.status_code}): {error_message_text}", color=(1, 0, 0, 1))
                     return None
-        except Exception as e:
-            self.update_notification(f"Captcha error: {e}", (1, 0, 0, 1))
+        except requests.exceptions.Timeout:
+            self.update_notification(f"Error fetching CAPTCHA: Connection timed out for {user}", color=(1, 0, 0, 1))
+        except requests.exceptions.RequestException as e:
+            self.update_notification(f"Error fetching CAPTCHA: {e}", color=(1, 0, 0, 1))
         return None
 
-    def predict_captcha(self, pil_img: PILImage.Image):
+    def predict_captcha(self, pil_img: PILImage.Image):  # Internal messages in English
         t_api_start = time.time()
         try:
-            img_byte_arr = io.BytesIO()
-            pil_img.save(img_byte_arr, format='PNG')
+            img_byte_arr = io.BytesIO();
+            pil_img.save(img_byte_arr, format='PNG');
             img_byte_arr.seek(0)
             files = {"image": ("captcha.png", img_byte_arr, "image/png")}
+            response = requests.post(self.captcha_api_url, files=files, timeout=30)
+            response.raise_for_status()
+            api_response = response.json()
+            predicted_text = api_response.get("result")  # This result could be numbers/English for CAPTCHA
 
-            response = requests.post(CAPTCHA_API_URL, files=files, timeout=30)
-            api_time = (time.time() - t_api_start) * 1000
-
-            full_json = response.json()
-            # عرض كامل الرد بدلاً من الصورة
-            self.update_notification(f"captcha received: {full_json}", (0,0,1,1))
-            return full_json.get('result'), api_time
+            if not predicted_text and predicted_text != "":
+                self.update_notification("API Error: Prediction result is missing or null.", color=(1, 0.5, 0, 1))
+                return None, 0, (time.time() - t_api_start) * 1000
+            total_api_time_ms = (time.time() - t_api_start) * 1000
+            return predicted_text, 0, total_api_time_ms
+        except requests.exceptions.Timeout:
+            self.update_notification(f"API Request Error: Timeout connecting to {self.captcha_api_url}",
+                                     color=(1, 0, 0, 1))
+        except requests.exceptions.ConnectionError:
+            self.update_notification(f"API Request Error: Could not connect to {self.captcha_api_url}",
+                                     color=(1, 0, 0, 1))
+        except requests.exceptions.RequestException as e:
+            self.update_notification(f"API Request Error: {e}", color=(1, 0, 0, 1))
+        except ValueError as e:  # JSONDecodeError
+            self.update_notification(f"API Response Error: Invalid JSON received. {e}", color=(1, 0, 0, 1))
         except Exception as e:
-            self.update_notification(f"API Request Error: {e}", (1, 0, 0, 1))
-            return None, (time.time() - t_api_start) * 1000
+            self.update_notification(f"Error calling prediction API: {e}", color=(1, 0, 0, 1))
+        return None, 0, (time.time() - t_api_start) * 1000
 
-    def _display_captcha(self, b64data):
-        # تجاوز عرض الصورة، نعرض نص فقط بعد استلام الرد
-        pass
+    def _display_captcha(self, b64data):  # Internal messages in English
+        try:
+            if not self.ids.captcha_box: return
+            self.ids.captcha_box.clear_widgets()
+            b64 = b64data.split(',')[1] if ',' in b64data else b64data
+            raw = base64.b64decode(b64);
+            pil_original = PILImage.open(io.BytesIO(raw))
+            frames = [];
+            try:
+                while True: frames.append(np.array(pil_original.convert('RGB'), dtype=np.uint8)); pil_original.seek(
+                    pil_original.tell() + 1)
+            except EOFError:
+                pass
+            bg = np.median(np.stack(frames), axis=0).astype(np.uint8) if frames else np.array(
+                pil_original.convert('RGB'), dtype=np.uint8)
+            gray = (0.2989 * bg[..., 0] + 0.5870 * bg[..., 1] + 0.1140 * bg[..., 2]).astype(np.uint8)
+            hist, _ = np.histogram(gray.flatten(), bins=256, range=(0, 256));
+            total = gray.size;
+            sum_tot = np.dot(np.arange(256), hist)
+            sumB = 0;
+            wB = 0;
+            max_var = 0;
+            thresh = 0
+            for i, h in enumerate(hist):
+                wB += h;
+                if wB == 0: continue
+                wF = total - wB;
+                if wF == 0: break
+                sumB += i * h;
+                mB = sumB / wB;
+                mF = (sum_tot - sumB) / wF;
+                varBetween = wB * wF * (mB - mF) ** 2
+                if varBetween > max_var: max_var = varBetween;thresh = i
+            binary_pil_img = PILImage.fromarray(gray, 'L').point(lambda p: 255 if p > thresh else 0)
+            buf = io.BytesIO();
+            binary_pil_img.save(buf, format='PNG');
+            buf.seek(0)
+            core_img = CoreImage(buf, ext='png');
+            img_w = KivyImage(texture=core_img.texture, size_hint_y=None, height='90dp')
+            self.ids.captcha_box.add_widget(img_w)
+            pred_text, pre_ms, api_call_ms = self.predict_captcha(binary_pil_img)  # pred_text is likely LTR
 
-    def submit_captcha(self, sol):
-        # كما في الكود الأصلي، عرض كامل نص الخادم في Popup
+            if pred_text is not None:
+                self.update_notification(f"Predicted CAPTCHA (API): {pred_text}",
+                                         color=(0, 0, 1, 1))  # pred_text is likely LTR
+                if self.ids.speed_label: self.ids.speed_label.text = f"API Call Time: {api_call_ms:.2f} ms"
+                self.submit_captcha(pred_text)
+        except Exception as e:
+            self.update_notification(f"Error processing/displaying captcha: {e}", color=(1, 0, 0, 1))
+
+    def submit_captcha(self, sol):  # sol is likely LTR (captcha solution)
         if not self.current_captcha:
-            self.update_notification("Error: No CAPTCHA context.", (1, 0, 0, 1))
+            self.update_notification("Error: No current CAPTCHA context for submission.", color=(1, 0, 0, 1))
             return
-        user, pid = self.current_captcha
+        user, pid = self.current_captcha;
         sess = self.accounts[user]["session"]
         url = f"https://api.ecsc.gov.sy:8443/rs/reserve?id={pid}&captcha={sol}"
         try:
-            r = sess.get(url, verify=False)
-            full_text = r.text
-            success = (r.status_code == 200)
-            self.update_notification(f"Submit response: {r.status_code}", (0,1,0,1) if success else (1,0,0,1), success=success)
-            lbl = Label(
-                text=wrap_rtl(full_text),
-                font_name='Arabic',
-                text_size=(self.width*0.9, None),
-                halign='right',
-                valign='top',
-                size_hint_y=None
-            )
-            lbl.bind(texture_size=lambda inst, val: setattr(inst, 'height', val[1]))
-            Popup(title=wrap_rtl('Server Response / رد الخادم'), content=lbl, size_hint=(0.9, 0.6)).open()
-        except Exception as e:
-            self.update_notification(f"Submit error: {e}", (1, 0, 0, 1))
+            r = sess.get(url, verify=False, timeout=20)
+            col = (0, 1, 0, 1) if r.status_code == 200 else (1, 0, 0, 1)
+            # Response message from server could be Arabic
+            msg_text_raw = r.text
+            try:
+                msg_text_raw = r.content.decode('utf-8', errors='replace')
+            except Exception:
+                pass
+            self.update_notification(f"Submit response: {msg_text_raw}", color=col)  # update_notification handles bidi
+        except requests.exceptions.Timeout:
+            self.update_notification("Submit error: Connection timed out", color=(1, 0, 0, 1))
+        except requests.exceptions.RequestException as e:
+            self.update_notification(f"Submit error: {e}", color=(1, 0, 0, 1))
+
+
+class StartCodeInputWidget(BoxLayout):  # UI is English
+    pass
+
 
 class CaptchaApp(App):
+    DEFAULT_FONT_NAME = DEFAULT_FONT_NAME  # Make it accessible in KV via app.
+
+    API_URL_PREFIX = "https://"
+    API_URL_SUFFIX = ".pythonanywhere.com/predict"
+    captcha_api_url_dynamic = None
+
+    def _get_root_widget(self):  # Logic to decide initial widget
+        app_config = self.store.get('app_config') if self.store.exists('app_config') else {}
+        start_code = app_config.get('start_code')
+
+        if start_code:
+            if not self.captcha_api_url_dynamic:  # Ensure it's set
+                self.captcha_api_url_dynamic = f"{self.API_URL_PREFIX}{start_code}{self.API_URL_SUFFIX}"
+            return CaptchaWidget(captcha_api_url_dynamic=self.captcha_api_url_dynamic)
+        else:
+            return StartCodeInputWidget()
+
     def build(self):
+        self.store_path = os.path.join(self.user_data_dir, 'app_settings.json')
+        self.store = JsonStore(self.store_path)
         Builder.load_string(KV)
-        return CaptchaWidget()
+        self.title = "Captcha Automation Tool"  # English title
+        return self._get_root_widget()
+
+    def _save_start_code(self, start_code_val):
+        app_config = self.store.get('app_config') if self.store.exists('app_config') else {}
+        app_config['start_code'] = start_code_val
+        self.store.put('app_config', **app_config)
+
+    def save_start_code_and_load_main_app(self, start_code_text):
+        start_code = start_code_text.strip()
+        if not start_code:
+            # Error popup with English text
+            popup_content = Label(text='Start Code cannot be empty!', font_name=self.DEFAULT_FONT_NAME)
+            popup = Popup(title='Input Error', content=popup_content,
+                          size_hint=(0.7, 0.3), title_font=self.DEFAULT_FONT_NAME)
+            popup.open()
+            return
+
+        self._save_start_code(start_code)
+        self.captcha_api_url_dynamic = f"{self.API_URL_PREFIX}{start_code}{self.API_URL_SUFFIX}"
+
+        # Transition UI
+        if self.root:
+            self.root.clear_widgets()
+            main_widget = CaptchaWidget(captcha_api_url_dynamic=self.captcha_api_url_dynamic)
+            self.root.add_widget(main_widget)
+
 
 if __name__ == '__main__':
+    requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
     CaptchaApp().run()
