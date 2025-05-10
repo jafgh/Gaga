@@ -1,7 +1,7 @@
 [app]
 
 # (str) Title of your application
-title = mycaptchaapp
+title = MyCaptchaApp
 
 # (str) Package name
 package.name = mycaptchaapp
