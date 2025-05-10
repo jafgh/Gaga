@@ -1,42 +1,61 @@
 [app]
-# اسم التطبيق
-title = MyCaptchaApp
-# حزمة الـ APK
-package.name = mycaptchaapp
+
+# (str) Title of your application
+title = JEFO@ECSC
+
+# (str) Package name
+package.name = JEFO
 package.domain = org.example
 
-# مجلد المصدر حيث يوجد main.py
+# (str) Source code where the main.py live
 source.dir = .
 
-# إصدار التطبيق
+# (str) Application version (إلزامي)
 version = 1.0.0
 
-# متطلبات بايثون (يشمل kivy, numpy, Pillow, requests)
+# (list) Application requirements
 requirements = python3,kivy,requests,Pillow,numpy
 
-# واجهة عمودية، غير كامل الشاشة
+# (str) Supported orientation (portrait, landscape or all)
 orientation = portrait
+
+# (bool) Fullscreen or not
 fullscreen = 0
 
-# صلاحيات الإنترنت
+# (list) Permissions
 android.permissions = INTERNET
 
 # -----------------------------------------------------------------------------
-# Android-specific
+# Android specific
 # -----------------------------------------------------------------------------
-# API level للبناء (≥ 30 لنشر Google Play)
-android.api = 33
-# أقل API level يدعمه APK
-android.minapi = 21
-# NDK version
-android.ndk = 25b
-# Build tools version
-android.build_tools_version = 36.0.0
 
-# اقبل تراخيص SDK & Android تلقائيّاً
+# (bool) Accept Android SDK license prompts automatically
 android.accept_sdk_license = True
+
+# (bool) Accept Android “android” and “build-tools” licenses automatically
 android.accept_android_licenses = True
 
-# استخدم فرع التطوير من python-for-android لحل مشاكل AAB والبناء :contentReference[oaicite:0]{index=0}
-# (إلغاء التعليق واستبدال master بـ develop)
-p4a.branch = develop
+# (int) Android API to use for compiling (≥ 30 مطلوب لنشر Google Play)
+android.api = 33
+
+# (int) Minimum Android API your APK will support
+android.minapi = 21
+
+# (str) Android NDK version to use (≥ 25b)
+android.ndk = 25b
+
+# (str) Android build tools version
+android.build_tools_version = 36.0.0
+
+# (bool) Skip automatic SDK updates (False للسماح بالتحديثات)
+android.skip_update = False
+
+# -----------------------------------------------------------------------------
+# Buildozer behavior
+# -----------------------------------------------------------------------------
+
+# (int) verbosity: 0 normal, 1 warning, 2 info, 3 debug
+log_level = 2
+
+# (bool) Clean build: يمسح مجلد .buildozer و bin/ قبل البناء
+clean_build = True
