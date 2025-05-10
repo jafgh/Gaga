@@ -1,7 +1,7 @@
 [app]
 # اسم التطبيق
 title = MyCaptchaApp
-# حزمة الـ APK (لا تضع مسافات)
+# حزمة الـ APK
 package.name = mycaptchaapp
 package.domain = org.example
 
@@ -11,18 +11,18 @@ source.dir = .
 # إصدار التطبيق
 version = 1.0.0
 
-# متطلبات بايثون (يشمل kivy و numpy و Pillow و requests)
+# متطلبات بايثون (يشمل kivy, numpy, Pillow, requests)
 requirements = python3,kivy,requests,Pillow,numpy
 
-# اتجاه واجهة المستخدم
+# واجهة عمودية، غير كامل الشاشة
 orientation = portrait
 fullscreen = 0
 
-# صلاحيات أندرويد
+# صلاحيات الإنترنت
 android.permissions = INTERNET
 
 # -----------------------------------------------------------------------------
-# إعدادات أندرويد
+# Android-specific
 # -----------------------------------------------------------------------------
 # API level للبناء (≥ 30 لنشر Google Play)
 android.api = 33
@@ -33,6 +33,10 @@ android.ndk = 25b
 # Build tools version
 android.build_tools_version = 36.0.0
 
-# قبول تراخيص SDK تلقائيّاً
+# اقبل تراخيص SDK & Android تلقائيّاً
 android.accept_sdk_license = True
 android.accept_android_licenses = True
+
+# استخدم فرع التطوير من python-for-android لحل مشاكل AAB والبناء :contentReference[oaicite:0]{index=0}
+# (إلغاء التعليق واستبدال master بـ develop)
+p4a.branch = develop
