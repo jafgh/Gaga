@@ -48,7 +48,7 @@ android.api = 34 # موصى به بدلاً من 33
 android.minapi = 28
 
 # (str) Android NDK version to use (e.g. 25b, 26b)
-android.ndk = 25b # أو 26b
+android.ndk = 26b # أو 26b
 
 # (str) Android build tools version - من الأفضل تركه لـ Buildozer أو مطابقته لـ android.api
 # android.build_tools_version = 34.0.0 # مثال إذا كان android.api = 34
