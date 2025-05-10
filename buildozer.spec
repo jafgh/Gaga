@@ -1,23 +1,22 @@
 [app]
+
 # (str) Title of your application
 title = MyCaptchaApp
 
 # (str) Package name
 package.name = mycaptchaapp
-
-# (str) Package domain (needed for android/ios packaging)
 package.domain = org.example
 
 # (str) Source code where the main.py live
 source.dir = .
 
-# (list) File extensions to include in the APK
-source.include_exts = py,kv,png,jpg
+# (str) Application version (إلزامي)
+version = 1.0.0
 
 # (list) Application requirements
 requirements = python3,kivy,requests,Pillow,numpy
 
-# (list) Supported orientation (one or more of: portrait, landscape,…)
+# (str) Supported orientation (portrait, landscape or all)
 orientation = portrait
 
 # (bool) Fullscreen or not
@@ -29,19 +28,34 @@ android.permissions = INTERNET
 # -----------------------------------------------------------------------------
 # Android specific
 # -----------------------------------------------------------------------------
-# (int) Android API to use for compiling (should be installed)
+
+# (bool) Accept Android SDK license prompts automatically
+android.accept_sdk_license = True
+
+# (bool) Accept Android “android” and “build-tools” licenses automatically
+android.accept_android_licenses = True
+
+# (int) Android API to use for compiling (≥ 30 مطلوب لنشر Google Play)
 android.api = 33
+
 # (int) Minimum Android API your APK will support
 android.minapi = 21
-# (str) Android NDK version to use
+
+# (str) Android NDK version to use (≥ 25b)
 android.ndk = 25b
-# (str) Android build-tools version to use
+
+# (str) Android build tools version
 android.build_tools_version = 36.0.0
+
+# (bool) Skip automatic SDK updates (False للسماح بالتحديثات)
+android.skip_update = False
 
 # -----------------------------------------------------------------------------
 # Buildozer behavior
 # -----------------------------------------------------------------------------
+
 # (int) verbosity: 0 normal, 1 warning, 2 info, 3 debug
 log_level = 2
-# (bool) clean build before starting
+
+# (bool) Clean build: يمسح مجلد .buildozer و bin/ قبل البناء
 clean_build = True
