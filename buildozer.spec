@@ -36,16 +36,16 @@ android.accept_sdk_license = True
 android.accept_android_licenses = True
 
 # (int) Android API to use for compiling (≥ 30 مطلوب لنشر Google Play)
-android.api = 32
+android.api = 31
 
 # (int) Minimum Android API your APK will support
-android.minapi = 25
+android.minapi = 21
 
 # (str) Android NDK version to use (≥ 25b)
-android.ndk = 26b
+android.ndk = 25b
 
 # (str) Android build tools version
-android.build_tools_version = 36.0.0
+android.build_tools_version = 39.0.0
 
 # (bool) Skip automatic SDK updates (False للسماح بالتحديثات)
 android.skip_update = False
