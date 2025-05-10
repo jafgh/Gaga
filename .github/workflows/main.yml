@@ -1,6 +1,5 @@
 name: Build Android APK
 
-# يبنى عند كل push أو PR على الفرع main
 on:
   push:
     branches: [ main ]
@@ -11,50 +10,50 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     env:
-      # مسار SDK الافتراضي
+      # مسار SDK المستخدم لاحقاً
       ANDROID_SDK_ROOT: ${{ runner.tool_cache }}/android-sdk
 
     steps:
-      # 1) جلب الشيفرة
+      # 1) Checkout الشيفرة
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2) تثبيت Java 8 لأن Buildozer يفضلها أحياناً على Java 11 :contentReference[oaicite:0]{index=0}
-      - name: Set up Java 8
+      # 2) جهّز Java 11 لأن Android Gradle plugin يتطلّب Java 11 :contentReference[oaicite:2]{index=2}
+      - name: Set up Java 11
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
-          java-version: '8'
+          java-version: '11'
 
-      # 3) تثبيت مكتبات النظام المطلوبة لـ SDL2 و Kivy :contentReference[oaicite:1]{index=1}
+      # 3) ثبّت المكتبات النظامية المطلوبة لـ SDL2 و Kivy :contentReference[oaicite:3]{index=3}
       - name: Install apt dependencies
         run: sudo apt-get update && sudo apt-get install -y \
               libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
               libgl1-mesa-dev libgles2-mesa-dev zlib1g-dev libfreetype6-dev
 
-      # 4) إعداد Android SDK/NDK وأدوات البناء :contentReference[oaicite:2]{index=2}
+      # 4) جهّز Android SDK & NDK وأدوات البناء :contentReference[oaicite:4]{index=4}
       - name: Set up Android SDK & NDK
-        uses: android-actions/setup-android@v2
+        uses: android-actions/setup-android@v3
         with:
           api-level: 33
           build-tools: "36.0.0"
           ndk: "25b"
 
-      # 5) تثبيت Buildozer و Cython
+      # 5) ثبّت Buildozer و Cython
       - name: Install Buildozer & Cython
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
           pip install Cython==0.29.33 buildozer
 
-      # 6) تنظيف أي بقايا بناء سابقة
+      # 6) نظّف أي بناء سابق
       - name: Clean previous builds
         run: buildozer android clean
 
-      # 7) بناء الـ APK بصلاحية debug
+      # 7) إبنِ APK بصلاحيات debug
       - name: Build APK
         run: buildozer android debug --verbose < /dev/null
 
-      # 8) رفع الـ APK الناتج كـ artifact
+      # 8) ارفع الـ APK الناتج كـ artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
