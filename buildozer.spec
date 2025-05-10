@@ -1,7 +1,7 @@
 [app]
 
 # (str) Title of your application
-title = MyCaptchaApp
+title = jefo@ecsc
 
 # (str) Package name
 package.name = mycaptchaapp
@@ -36,10 +36,10 @@ android.accept_sdk_license = True
 android.accept_android_licenses = True
 
 # (int) Android API to use for compiling (≥ 30 مطلوب لنشر Google Play)
-android.api = 34
+android.api = 32
 
 # (int) Minimum Android API your APK will support
-android.minapi = 21
+android.minapi = 25
 
 # (str) Android NDK version to use (≥ 25b)
 android.ndk = 26b
