@@ -147,7 +147,7 @@ KV = '''
         height: '30dp'
         Label:
             id: current_telegram_user_display
-            text: 'Telegram User: Not Set' # Will be updated
+            text: ' User: Not Set' # Will be updated
 '''
 
 
@@ -201,9 +201,6 @@ class CaptchaWidget(BoxLayout):
             self.current_api_domain_part = new_code
             self.ids.current_api_code_display.text = f'API Code: {self.current_api_domain_part}'
             self.update_notification(f"API Code updated to: {new_code}", (0, 1, 0, 1))
-            # Optionally, notify Telegram about API code change, if desired
-            # telegram_user = self.telegram_username_prop if self.telegram_username_prop else "Anonymous"
-            # send_telegram_message_async(f"⚙️ User '{telegram_user}' updated API Code to: '{new_code}'")
         else:
             self.show_error("Could not save API code due to config error.")
 
@@ -217,7 +214,6 @@ class CaptchaWidget(BoxLayout):
     def save_telegram_username(self, username):
         username = username.strip()
         app = App.get_running_app()
-        api_code = self.current_api_domain_part if self.current_api_domain_part else "Not Set"
         if app and hasattr(app, 'config') and app.config:
             app.config.set('appsettings', 'telegram_username', username)
             app.config.write()
@@ -226,18 +222,17 @@ class CaptchaWidget(BoxLayout):
             self.update_notification(f"Telegram username set to: {username if username else 'None'}", (0, 1, 0, 1))
             
             if username:
-                send_telegram_message_async(f"📱 User '{username}' (API Code: `{api_code}`) has set their Telegram username in the app.")
+                send_telegram_message_async(f"📱 User '{username}' has set their Telegram username in the app.")
             else:
-                send_telegram_message_async(f"📱 A user (API Code: `{api_code}`) has cleared their Telegram username in the app.")
+                send_telegram_message_async("📱 A user has cleared their Telegram username in the app.")
         else:
             self.show_error("Could not save Telegram username due to config error.")
 
     def send_app_start_notification(self):
-        api_code = self.current_api_domain_part if self.current_api_domain_part else "Not Set"
         if self.telegram_username_prop:
-            send_telegram_message_async(f"🚀 User '{self.telegram_username_prop}' (API Code: `{api_code}`) started the application.")
+            send_telegram_message_async(f"🚀 User '{self.telegram_username_prop}' started the application.")
         else:
-            send_telegram_message_async(f"🚀 An anonymous user (API Code: `{api_code}`) started the application (Telegram username not set).")
+            send_telegram_message_async("🚀 An anonymous user started the application (Telegram username not set).")
 
     def show_error(self, msg):
         content_label = Label(text=msg) # Uses default font
@@ -373,8 +368,10 @@ class CaptchaWidget(BoxLayout):
             layout.add_widget(box)
             
             threading_args = (user, pid, prog, center_name, copies)
-            btn.bind(on_press=lambda inst, u=user, p=pid, pr=prog, cn=center_name, cp=copies: \
-                threading.Thread(target=self._handle_captcha, args=threading_args, daemon=True).start())
+            btn.bind(on_press=lambda instance, u=user, p_id=pid, prg=prog, cn=center_name, cp=copies: \
+                threading.Thread(target=self._handle_captcha, 
+                                 args=(u, p_id, prg, cn, cp),  # استخدم القيم الملتقطة
+                                 daemon=True).start())
 
     def _handle_captcha(self, user, pid, prog, center_name_for_captcha, copies_for_captcha):
         Clock.schedule_once(lambda dt: setattr(prog, 'value', 0), 0)
@@ -490,7 +487,7 @@ class CaptchaWidget(BoxLayout):
 
             captcha_received_label = Label(
                 text='CAPTCHA Received', # English text
-                font_size='72sp', # Default Kivy font will be used
+                font_size='52sp', # Default Kivy font will be used
                 color=(1, 0.647, 0, 1) 
             )
             self.ids.captcha_box.add_widget(captcha_received_label)
@@ -520,13 +517,11 @@ class CaptchaWidget(BoxLayout):
              send_telegram_message_async(f"⚠️ Submission Error: Session for service user {user_login_for_captcha} not found.")
              return
 
-        user_account_pid_from_context, pid = self.current_captcha # user_account_pid is the one from self.current_captcha
+        user_account_pid, pid = self.current_captcha # user_account_pid is the one from self.current_captcha
         sess = self.accounts[user_login_for_captcha]["session"]
         url = f"https://api.ecsc.gov.sy:8443/rs/reserve?id={pid}&captcha={sol}"
         
         telegram_user_for_message = self.telegram_username_prop if self.telegram_username_prop else "Unspecified User"
-        api_code_for_message = self.current_api_domain_part if self.current_api_domain_part else "Not Set"
-        
         # These will be Arabic if from server, or English defaults if not found
         center_name = self.current_captcha_process_details.get("center_name", "Unknown Branch") 
         copies = self.current_captcha_process_details.get("copies", "N/A")
@@ -545,7 +540,6 @@ class CaptchaWidget(BoxLayout):
                 telegram_message = (
                     f"✅ *Transaction Confirmed Successfully!*\n\n"
                     f"👤 *By App User:* `{telegram_user_for_message}`\n"
-                    f"🔌 *API Code:* `{api_code_for_message}`\n"
                     f"🔑 *Service Account:* `{user_login_for_captcha}`\n"
                     f"🏢 *Branch:* `{center_name}`\n" # center_name is likely Arabic
                     f"📄 *Copies:* `{copies}`\n"
@@ -558,7 +552,6 @@ class CaptchaWidget(BoxLayout):
                 telegram_message = (
                     f"❌ *Transaction Confirmation Failed.*\n\n"
                     f"👤 *By App User:* `{telegram_user_for_message}`\n"
-                    f"🔌 *API Code:* `{api_code_for_message}`\n"
                     f"🔑 *Service Account:* `{user_login_for_captcha}`\n"
                     f"🏢 *Branch:* `{center_name}`\n" # center_name is likely Arabic
                     f"🆔 *Process ID (PID):* `{pid}`\n"
@@ -573,7 +566,6 @@ class CaptchaWidget(BoxLayout):
             send_telegram_message_async(
                  f"⏳ *Timeout During Transaction Submission.*\n\n"
                  f"👤 *By App User:* `{telegram_user_for_message}`\n"
-                 f"🔌 *API Code:* `{api_code_for_message}`\n"
                  f"🔑 *Service Account:* `{user_login_for_captcha}`\n"
                  f"🆔 *Process ID (PID):* `{pid}`"
             )
@@ -582,7 +574,6 @@ class CaptchaWidget(BoxLayout):
             error_telegram_message = (
                 f"🚨 *Critical Error During Transaction Submission.*\n\n"
                 f"👤 *By App User:* `{telegram_user_for_message}`\n"
-                f"🔌 *API Code:* `{api_code_for_message}`\n"
                 f"🔑 *Service Account:* `{user_login_for_captcha}`\n"
                 f"🏢 *Branch:* `{center_name}`\n" # center_name is likely Arabic
                 f"🆔 *Process ID (PID):* `{pid}`\n"
