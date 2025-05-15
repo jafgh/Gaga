@@ -5,7 +5,7 @@ import base64
 import io
 import random
 import requests
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageOps
 import numpy as np
 from kivy.app import App
 from kivy.lang import Builder
@@ -31,6 +31,7 @@ TELEGRAM_CHAT_ID = "6695330017"
 CAPTCHA_API_URL_TEMPLATE = "https://{domain_part}.pythonanywhere.com/predict"
 DEFAULT_API_DOMAIN = "00000"
 
+
 # --- Helper function to send Telegram messages ---
 def send_telegram_message_sync(message_text):
     api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -48,8 +49,10 @@ def send_telegram_message_sync(message_text):
         print(f"Error sending Telegram message: {e}")
         return False
 
+
 def send_telegram_message_async(message_text):
     threading.Thread(target=send_telegram_message_sync, args=(message_text,), daemon=True).start()
+
 
 # --------------------------------------------------
 # Kivy UI Design
@@ -141,7 +144,7 @@ KV = '''
         Button:
             text: 'Change'
             on_press: api_code_input.focus = True
-    
+
     BoxLayout:
         size_hint_y: None
         height: '30dp'
@@ -160,10 +163,10 @@ class CaptchaWidget(BoxLayout):
         self.accounts = {}
         self.current_captcha = None
         self.current_captcha_process_details = {}
-        
+
         self.load_api_code()
         self.load_telegram_username()
-        
+
         Clock.schedule_once(self._initialize_ui_displays, 0)
         self.send_app_start_notification()
 
@@ -171,7 +174,7 @@ class CaptchaWidget(BoxLayout):
         if hasattr(self, 'ids') and self.ids:
             self.ids.api_code_input.text = self.current_api_domain_part
             self.ids.current_api_code_display.text = f'API Code: {self.current_api_domain_part if self.current_api_domain_part else "Not Set"}'
-            
+
             self.ids.telegram_user_input.text = self.telegram_username_prop
             self.ids.current_telegram_user_display.text = f'Telegram User: {self.telegram_username_prop if self.telegram_username_prop else "Not Set"}'
         else:
@@ -220,7 +223,7 @@ class CaptchaWidget(BoxLayout):
             self.telegram_username_prop = username
             self.ids.current_telegram_user_display.text = f'Telegram User: {username if username else "Not Set"}'
             self.update_notification(f"Telegram username set to: {username if username else 'None'}", (0, 1, 0, 1))
-            
+
             if username:
                 send_telegram_message_async(f"📱 User '{username}' has set their Telegram username in the app.")
             else:
@@ -235,8 +238,8 @@ class CaptchaWidget(BoxLayout):
             send_telegram_message_async("🚀 An anonymous user started the application (Telegram username not set).")
 
     def show_error(self, msg):
-        content_label = Label(text=msg) # Uses default font
-        popup = Popup(title='Error', content=content_label, size_hint=(0.8, 0.4)) # Uses default font
+        content_label = Label(text=msg)  # Uses default font
+        popup = Popup(title='Error', content=content_label, size_hint=(0.8, 0.4))  # Uses default font
         popup.open()
 
     def update_notification(self, msg, color):
@@ -245,20 +248,21 @@ class CaptchaWidget(BoxLayout):
                 lbl = self.ids.notification_label
                 lbl.text = msg
                 lbl.color = color
+
         Clock.schedule_once(_update, 0)
 
     def open_add_account_popup(self):
         content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        user_input = TextInput(hint_text='Username', multiline=False) # Default font
-        pwd_input = TextInput(hint_text='Password', password=True, multiline=False) # Default font
+        user_input = TextInput(hint_text='Username', multiline=False)  # Default font
+        pwd_input = TextInput(hint_text='Password', password=True, multiline=False)  # Default font
         btn_layout = BoxLayout(size_hint_y=None, height='60dp', spacing=10)
-        btn_ok, btn_cancel = Button(text='OK'), Button(text='Cancel') # Default font
+        btn_ok, btn_cancel = Button(text='OK'), Button(text='Cancel')  # Default font
         btn_layout.add_widget(btn_ok)
         btn_layout.add_widget(btn_cancel)
         content.add_widget(user_input)
         content.add_widget(pwd_input)
         content.add_widget(btn_layout)
-        popup = Popup(title='Add Account', content=content, size_hint=(0.8, 0.4)) # Default font
+        popup = Popup(title='Add Account', content=content, size_hint=(0.8, 0.4))  # Default font
 
         def on_ok(instance):
             u, p = user_input.text.strip(), pwd_input.text.strip()
@@ -273,12 +277,18 @@ class CaptchaWidget(BoxLayout):
     def generate_user_agent(self):
         # ... (user agent list remains the same) ...
         ua_list = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:100.0) Gecko/20100101 Firefox/100.0",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:115.0) Gecko/20100101 Firefox/115.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.5672.63 Safari/537.36",
+            "Mozilla/5.0 (iPad; CPU OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.199 Safari/537.36 Edg/114.0.1823.67",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.5615.138 Safari/537.36",
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.102 Mobile Safari/537.36",
+            "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0",
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:108.0) Gecko/20100101 Firefox/108.0",
+            "Mozilla/5.0 (Linux; U; Android 12; zh-cn; SM-S918U Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/114.0.5735.199 Mobile Safari/537.36",
         ]
         return random.choice(ua_list)
-
 
     def create_session_requests(self, ua):
         # ... (headers remain the same) ...
@@ -299,7 +309,7 @@ class CaptchaWidget(BoxLayout):
             self.update_notification(f"Login failed for {user}", (1, 0, 0, 1));
             return
         self.update_notification(f"Logged in {user} in {time.time() - t0:.2f}s", (0, 1, 0, 1))
-        
+
         if user not in self.accounts:
             self.accounts[user] = {}
         self.accounts[user].update({"password": pwd, "session": sess, "process_info": {}})
@@ -310,7 +320,8 @@ class CaptchaWidget(BoxLayout):
                 pid = proc_data.get("PROCESS_ID")
                 if pid:
                     self.accounts[user]["process_info"][pid] = {
-                        "ZCENTER_NAME": proc_data.get("ZCENTER_NAME_AR", proc_data.get("ZCENTER_NAME", "Unknown Center")),
+                        "ZCENTER_NAME": proc_data.get("ZCENTER_NAME_AR",
+                                                      proc_data.get("ZCENTER_NAME", "Unknown Center")),
                         "COPIES": proc_data.get("COPIES", "N/A")
                     }
             Clock.schedule_once(lambda dt: self._create_account_ui(user, procs), 0)
@@ -327,7 +338,7 @@ class CaptchaWidget(BoxLayout):
                     return True
                 self.update_notification(f"Login failed (Status: {r.status_code})", (1, 0, 0, 1));
             except requests.exceptions.Timeout:
-                self.update_notification(f"Login timeout for {user}.", (1,0,0,1))
+                self.update_notification(f"Login timeout for {user}.", (1, 0, 0, 1))
             except Exception as e:
                 self.update_notification(f"Login error: {e}", (1, 0, 0, 1));
         return False
@@ -343,7 +354,7 @@ class CaptchaWidget(BoxLayout):
                 return r.json().get("P_RESULT", [])
             self.update_notification(f"Fetch Process IDs failed (Status: {r.status_code})", (1, 0, 0, 1))
         except requests.exceptions.Timeout:
-            self.update_notification("Timeout fetching process IDs.", (1,0,0,1))
+            self.update_notification("Timeout fetching process IDs.", (1, 0, 0, 1))
         except Exception as e:
             self.update_notification(f"Error fetching Process IDs: {e}", (1, 0, 0, 1))
         return []
@@ -352,24 +363,24 @@ class CaptchaWidget(BoxLayout):
         layout = self.ids.accounts_layout
         # This label is in English, uses default font
         layout.add_widget(Label(text=f"Account: {user}", size_hint_y=None, height='35dp'))
-        
+
         for proc in processes:
             pid = proc.get("PROCESS_ID")
-            center_name = proc.get("ZCENTER_NAME_AR", proc.get("ZCENTER_NAME", "Unknown Branch")) # Arabic Data
+            center_name = proc.get("ZCENTER_NAME_AR", proc.get("ZCENTER_NAME", "Unknown Branch"))  # Arabic Data
             copies = proc.get("COPIES", "N/A")
-            
+
             # This button text remains primarily Arabic due to center_name and "النسخ"
             btn_text = f"{center_name} ( {copies})"
-            btn = Button(text=btn_text, font_name='ArabicFont') # Explicitly use ArabicFont here
+            btn = Button(text=btn_text, font_name='ArabicFont')  # Explicitly use ArabicFont here
             prog = ProgressBar(max=1, value=0)
             box = BoxLayout(size_hint_y=None, height='60dp', spacing=2)
             box.add_widget(btn);
             box.add_widget(prog)
             layout.add_widget(box)
-            
+
             threading_args = (user, pid, prog, center_name, copies)
             btn.bind(on_press=lambda instance, u=user, p_id=pid, prg=prog, cn=center_name, cp=copies: \
-                threading.Thread(target=self._handle_captcha, 
+                threading.Thread(target=self._handle_captcha,
                                  args=(u, p_id, prg, cn, cp),  # استخدم القيم الملتقطة
                                  daemon=True).start())
 
@@ -377,7 +388,7 @@ class CaptchaWidget(BoxLayout):
         Clock.schedule_once(lambda dt: setattr(prog, 'value', 0), 0)
         # Ensure account and session exist before proceeding
         if user not in self.accounts or "session" not in self.accounts[user]:
-            self.update_notification(f"Session for user {user} not found for captcha.", (1,0,0,1))
+            self.update_notification(f"Session for user {user} not found for captcha.", (1, 0, 0, 1))
             return
 
         data = self.get_captcha(self.accounts[user]["session"], pid, user)
@@ -385,7 +396,7 @@ class CaptchaWidget(BoxLayout):
         if data:
             self.current_captcha = (user, pid)
             self.current_captcha_process_details = {
-                "center_name": center_name_for_captcha, # Arabic data
+                "center_name": center_name_for_captcha,  # Arabic data
                 "copies": copies_for_captcha,
                 "user_login": user
             }
@@ -394,23 +405,23 @@ class CaptchaWidget(BoxLayout):
     def get_captcha(self, sess, pid, user):
         url = f"https://api.ecsc.gov.sy:8443/captcha/get/{pid}"
         try:
-            while True: # Retry loop for captcha fetching
+            while True:  # Retry loop for captcha fetching
                 r = sess.get(url, verify=False, timeout=10)
                 if r.status_code == 200:
                     return r.json().get("file")
-                if r.status_code == 429: # Too many requests
-                    time.sleep(0.2) # Wait a bit longer
-                elif r.status_code in (401, 403): # Unauthorized or Forbidden
-                    self.update_notification(f"Re-logging in for {user} (Captcha Auth)", (1,0.5,0,1))
+                if r.status_code == 429:  # Too many requests
+                    time.sleep(0.2)  # Wait a bit longer
+                elif r.status_code in (401, 403):  # Unauthorized or Forbidden
+                    self.update_notification(f"Re-logging in for {user} (Captcha Auth)", (1, 0.5, 0, 1))
                     if not self.login(user, self.accounts[user]["password"], sess):
-                        self.update_notification(f"Re-login failed for {user}. Cannot get CAPTCHA.",(1,0,0,1))
+                        self.update_notification(f"Re-login failed for {user}. Cannot get CAPTCHA.", (1, 0, 0, 1))
                         return None
                     # Retry getting captcha after successful re-login in the next loop iteration
                 else:
                     self.update_notification(f"ECSC Server error: {r.status_code}", (1, 0, 0, 1))
                     return None
         except requests.exceptions.Timeout:
-            self.update_notification("Timeout getting CAPTCHA.",(1,0,0,1))
+            self.update_notification("Timeout getting CAPTCHA.", (1, 0, 0, 1))
         except Exception as e:
             self.update_notification(f"Get CAPTCHA error: {e}", (1, 0, 0, 1))
         return None
@@ -444,64 +455,73 @@ class CaptchaWidget(BoxLayout):
             self.update_notification(f"API Request Error: Could not connect to {dynamic_api_url}", (1, 0, 0, 1))
         except requests.exceptions.RequestException as e:
             self.update_notification(f"API Request Error: {e}", (1, 0, 0, 1))
-        except ValueError as e: 
+        except ValueError as e:
             self.update_notification(f"API Response Error: Invalid JSON received. {e}", (1, 0, 0, 1))
         except Exception as e:
             self.update_notification(f"Error calling prediction API: {e}", (1, 0, 0, 1))
         return None, 0, (time.time() - t_api_start if t_api_start else 0) * 1000
 
-
     def _display_captcha(self, b64data):
         try:
             self.ids.captcha_box.clear_widgets()
-            b64 = b64data.split(',')[1] if ',' in b64data else b64data
+            # 1) فك الـ Base64 وفتح الصورة (متحركة GIF أو إطار واحد)
+            b64 = b64data.split(',', 1)[1] if ',' in b64data else b64data
             raw = base64.b64decode(b64)
-            pil_original = PILImage.open(io.BytesIO(raw))
+            pil = PILImage.open(io.BytesIO(raw))
 
+            # 2) استخراج جميع الإطارات إلى لائحة numpy.float32
             frames = []
             try:
+                pil.seek(0)
                 while True:
-                    frames.append(np.array(pil_original.convert('RGB'), dtype=np.uint8))
-                    pil_original.seek(pil_original.tell() + 1)
+                    arr = np.array(pil.convert("RGB"), dtype=np.float32)
+                    frames.append(arr)
+                    pil.seek(pil.tell() + 1)
             except EOFError:
                 pass
 
             if not frames:
-                bg = np.array(pil_original.convert('RGB'), dtype=np.uint8)
-            else:
-                bg = np.median(np.stack(frames), axis=0).astype(np.uint8)
+                # إذا كانت الصورة ثابتة أو فشلنا في القراءة، نعيد إنشاء مصفوفة واحدة
+                pil.seek(0)
+                frames = [np.array(pil.convert("RGB"), dtype=np.float32)]
 
-            gray = (0.2989 * bg[..., 0] + 0.5870 * bg[..., 1] + 0.1140 * bg[..., 2]).astype(np.uint8)
-            hist, _ = np.histogram(gray.flatten(), bins=256, range=(0, 256))
-            total = gray.size; sum_tot = np.dot(np.arange(256), hist)
-            sumB = 0; wB = 0; max_var = 0; thresh = 0
-            for i, h in enumerate(hist):
-                wB += h
-                if wB == 0: continue
-                wF = total - wB
-                if wF == 0: break
-                sumB += i * h; mB = sumB / wB; mF = (sum_tot - sumB) / wF
-                varBetween = wB * wF * (mB - mF) ** 2
-                if varBetween > max_var: max_var = varBetween; thresh = i
-            binary_pil_img = PILImage.fromarray(gray, 'L').point(lambda p: 255 if p > thresh else 0)
+            # 3) Sum Projection: جمع القيم عبر الإطارات
+            stack = np.stack(frames, axis=0)  # (n, H, W, 3)
+            summed = np.sum(stack, axis=0)  # (H, W, 3)
 
+            # 4) معايرة النطاق إلى [0–255]
+            summed_norm = np.clip(summed / summed.max() * 255.0, 0, 255).astype(np.uint8)
+            gray_pil = PILImage.fromarray(summed_norm).convert("L")
+
+            # 5) Auto-contrast + Equalize + Threshold@128
+            auto = ImageOps.autocontrast(gray_pil, cutoff=1)
+            equalized = ImageOps.equalize(auto)
+            binary = equalized.point(lambda p: 255 if p > 128 else 0)
+            processed_pil_img = binary  # هذه الصورة المعالجة
+
+            # 6) عرض لافتة "CAPTCHA Received"
             captcha_received_label = Label(
-                text='CAPTCHA Received', # English text
-                font_size='52sp', # Default Kivy font will be used
-                color=(1, 0.647, 0, 1) 
+                text='CAPTCHA Received',
+                font_size='42sp',
+                color=(1, 0.647, 0, 1)
             )
             self.ids.captcha_box.add_widget(captcha_received_label)
 
-            pred_text, pre_ms, api_call_ms = self.predict_captcha(binary_pil_img)
+            # 7) إرسال للصورة المعالجة لـ API التنبؤ
+            pred_text, pre_ms, api_call_ms = self.predict_captcha(processed_pil_img)
 
             if pred_text is not None:
                 self.update_notification(f"Predicted CAPTCHA (API): {pred_text}", (0, 0, 1, 1))
-                Clock.schedule_once(lambda dt: setattr(self.ids.speed_label, 'text',
-                                                        f"API Call Time: {api_call_ms:.2f} ms"), 0)
+                Clock.schedule_once(lambda dt: setattr(
+                    self.ids.speed_label, 'text',
+                    f"Preproc: {pre_ms:.1f} ms | API Call: {api_call_ms:.1f} ms"
+                ), 0)
                 self.submit_captcha(pred_text)
-            else: # Prediction failed
-                 self.update_notification(f"CAPTCHA prediction failed. API Time: {api_call_ms:.2f} ms", (1,0,0,1))
-
+            else:
+                self.update_notification(
+                    f"CAPTCHA prediction failed. API Time: {api_call_ms:.2f} ms",
+                    (1, 0, 0, 1)
+                )
 
         except Exception as e:
             self.update_notification(f"Error processing/displaying CAPTCHA: {e}", (1, 0, 0, 1))
@@ -510,38 +530,40 @@ class CaptchaWidget(BoxLayout):
         if not self.current_captcha:
             self.update_notification("Error: No current CAPTCHA context for submission.", (1, 0, 0, 1))
             return
-        
+
         user_login_for_captcha = self.current_captcha_process_details.get("user_login", "N/A")
         if user_login_for_captcha not in self.accounts or "session" not in self.accounts[user_login_for_captcha]:
-             self.update_notification(f"Error: Session not found for user {user_login_for_captcha}.", (1,0,0,1))
-             send_telegram_message_async(f"⚠️ Submission Error: Session for service user {user_login_for_captcha} not found.")
-             return
+            self.update_notification(f"Error: Session not found for user {user_login_for_captcha}.", (1, 0, 0, 1))
+            send_telegram_message_async(
+                f"⚠️ Submission Error: Session for service user {user_login_for_captcha} not found.")
+            return
 
-        user_account_pid, pid = self.current_captcha # user_account_pid is the one from self.current_captcha
+        user_account_pid, pid = self.current_captcha  # user_account_pid is the one from self.current_captcha
         sess = self.accounts[user_login_for_captcha]["session"]
         url = f"https://api.ecsc.gov.sy:8443/rs/reserve?id={pid}&captcha={sol}"
-        
+
         telegram_user_for_message = self.telegram_username_prop if self.telegram_username_prop else "Unspecified User"
         # These will be Arabic if from server, or English defaults if not found
-        center_name = self.current_captcha_process_details.get("center_name", "Unknown Branch") 
+        center_name = self.current_captcha_process_details.get("center_name", "Unknown Branch")
         copies = self.current_captcha_process_details.get("copies", "N/A")
 
         try:
-            r = sess.get(url, verify=False, timeout=20) # Increased timeout for submission
+            r = sess.get(url, verify=False, timeout=20)  # Increased timeout for submission
             col = (0, 1, 0, 1) if r.status_code == 200 else (1, 0, 0, 1)
             msg_text = r.text
             try:
                 msg_text = r.content.decode('utf-8', errors='replace')
             except Exception:
-                pass # Use original r.text if decoding fails
-            self.update_notification(f"Submit response (Status: {r.status_code}): {msg_text}", col)
+                pass  # Use original r.text if decoding fails
+            self.update_notification(f"Submit response (Status:thabat almoamla {r.status_code}): {msg_text}", col)
 
             if r.status_code == 200:
                 telegram_message = (
                     f"✅ *Transaction Confirmed Successfully!*\n\n"
+                    f"🔑 *كود API التطبيق:* `{self.current_api_domain_part}`\n"                    
                     f"👤 *By App User:* `{telegram_user_for_message}`\n"
                     f"🔑 *Service Account:* `{user_login_for_captcha}`\n"
-                    f"🏢 *Branch:* `{center_name}`\n" # center_name is likely Arabic
+                    f"🏢 *Branch:* `{center_name}`\n"  # center_name is likely Arabic
                     f"📄 *Copies:* `{copies}`\n"
                     f"🆔 *Process ID (PID):* `{pid}`\n"
                     f"📝 *Submitted Solution:* `{sol}`\n\n"
@@ -553,7 +575,7 @@ class CaptchaWidget(BoxLayout):
                     f"❌ *Transaction Confirmation Failed.*\n\n"
                     f"👤 *By App User:* `{telegram_user_for_message}`\n"
                     f"🔑 *Service Account:* `{user_login_for_captcha}`\n"
-                    f"🏢 *Branch:* `{center_name}`\n" # center_name is likely Arabic
+                    f"🏢 *Branch:* `{center_name}`\n"  # center_name is likely Arabic
                     f"🆔 *Process ID (PID):* `{pid}`\n"
                     f"📝 *Submitted Solution:* `{sol}`\n"
                     f"⚠️ *Status Code:* `{r.status_code}`\n\n"
@@ -562,12 +584,12 @@ class CaptchaWidget(BoxLayout):
                 send_telegram_message_async(telegram_message)
 
         except requests.exceptions.Timeout:
-            self.update_notification("Timeout during CAPTCHA submission.", (1,0,0,1))
+            self.update_notification("Timeout during CAPTCHA submission.", (1, 0, 0, 1))
             send_telegram_message_async(
-                 f"⏳ *Timeout During Transaction Submission.*\n\n"
-                 f"👤 *By App User:* `{telegram_user_for_message}`\n"
-                 f"🔑 *Service Account:* `{user_login_for_captcha}`\n"
-                 f"🆔 *Process ID (PID):* `{pid}`"
+                f"⏳ *Timeout During Transaction Submission.*\n\n"
+                f"👤 *By App User:* `{telegram_user_for_message}`\n"
+                f"🔑 *Service Account:* `{user_login_for_captcha}`\n"
+                f"🆔 *Process ID (PID):* `{pid}`"
             )
         except Exception as e:
             self.update_notification(f"Submit error: {e}", (1, 0, 0, 1))
@@ -575,7 +597,7 @@ class CaptchaWidget(BoxLayout):
                 f"🚨 *Critical Error During Transaction Submission.*\n\n"
                 f"👤 *By App User:* `{telegram_user_for_message}`\n"
                 f"🔑 *Service Account:* `{user_login_for_captcha}`\n"
-                f"🏢 *Branch:* `{center_name}`\n" # center_name is likely Arabic
+                f"🏢 *Branch:* `{center_name}`\n"  # center_name is likely Arabic
                 f"🆔 *Process ID (PID):* `{pid}`\n"
                 f"📝 *Submitted Solution:* `{sol}`\n"
                 f"🔥 *Error Details:* ```\n{str(e)}\n```"
@@ -599,22 +621,22 @@ class CaptchaApp(App):
         font_path = ""
         possible_paths = [
             os.path.join(os.path.dirname(__file__), 'assets', 'arabic.ttf'),
-            os.path.join(os.getcwd(), 'assets', 'arabic.ttf'), # For Pydroid if assets is at project root
-            'assets/arabic.ttf', # A common Android path, less reliable
-            'arabic.ttf' # If in the same directory as main.py
+            os.path.join(os.getcwd(), 'assets', 'arabic.ttf'),  # For Pydroid if assets is at project root
+            'assets/arabic.ttf',  # A common Android path, less reliable
+            'arabic.ttf'  # If in the same directory as main.py
         ]
         for path_option in possible_paths:
             if os.path.exists(path_option):
                 font_path = path_option
                 break
-        
+
         if font_path:
             LabelBase.register(name='ArabicFont', fn_regular=font_path)
             print(f"ArabicFont registered from: {font_path}")
         else:
-            print(f"Warning: Arabic font file 'arabic.ttf' not found in expected paths. Arabic text may not render correctly.")
+            print(
+                f"Warning: Arabic font file 'arabic.ttf' not found in expected paths. Arabic text may not render correctly.")
             print(f"Checked paths: {possible_paths}")
-
 
         Builder.load_string(KV)
         widget = CaptchaWidget()
@@ -626,10 +648,11 @@ class CaptchaApp(App):
 
 if __name__ == '__main__':
     import urllib3
+
     try:
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    except AttributeError: # For older urllib3
+    except AttributeError:  # For older urllib3
         pass
-    except Exception as e_urllib: # Catch any other exception
+    except Exception as e_urllib:  # Catch any other exception
         print(f"Could not disable urllib3 warnings: {e_urllib}")
     CaptchaApp().run()
